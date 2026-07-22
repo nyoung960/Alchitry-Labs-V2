@@ -113,7 +113,7 @@ data object VivadoBuilder : ProjectBuilder() {
         buildString {
             append("set projDir \"").append("./vivado\"").appendLine()
             append("set projName \"").append(project.data.projectName).append("\"").appendLine()
-            appendLine("set topName top")
+            appendLine("set topName alchitry_top")
             append("set device ").append(project.data.board.fpgaName).appendLine()
             appendLine($$"if {[file exists \"$projDir\"]} { file delete -force \"$projDir\" }")
             appendLine($$"create_project $projName \"$projDir\" -part $device")
@@ -125,6 +125,7 @@ data object VivadoBuilder : ProjectBuilder() {
                 .appendLine("]")
             appendLine($$"read_xdc $xdcSources")
             appendLine("set_property STEPS.WRITE_BITSTREAM.ARGS.BIN_FILE true [get_runs impl_1]")
+            appendLine($$"set_property top $topName [get_filesets sources_1]")
             appendLine("update_compile_order -fileset sources_1")
             val cores = Runtime.getRuntime().availableProcessors()
             append("launch_runs -runs synth_1 -jobs ").appendLine(cores.toString())
