@@ -4,3 +4,162 @@
     "supportedBoards" : ["Au", "Au+", "AuV2", "PtV2"]
 **/
 
+module xilinx_probe #(
+    DATA_WIDTH = 2 : DATA_WIDTH > 1 && $width(DATA_WIDTH) <= 32,            // number of signals to capture
+    CAPTURE_DEPTH = 256 : CAPTURE_DEPTH > 0 && $width(CAPTURE_DEPTH) <= 32, // samples per capture
+    NONCE = 0 : $width(NONCE) <= 32                                         // project nonce
+)(
+    input clk,  // clock
+    input data[DATA_WIDTH]                              // signals to capture
+) {
+
+    const VERSION = 3
+
+    bscane2 info_scan (#JTAG_CHAIN(1))
+    bscane2 config_scan (#JTAG_CHAIN(2))
+    bscane2 data_scan (#JTAG_CHAIN(3))
+    bscane2 capture_scan(#JTAG_CHAIN(4))
+
+    sig rst
+    reset_conditioner reset_conditioner (.clk(clk), .in(info_scan.reset))
+    always rst = reset_conditioner.out
+
+    .clk(info_scan.tck) {
+        dff status[8+32+32+32]
+    }
+
+    async_fifo config_fifo (#WIDTH(1), #ENTRIES(8), .wclk(config_scan.tck), .wrst(0), .rclk(clk), .rrst(0))
+
+    enum State {IDLE, ARMED, FIRED, CAPTURED}
+
+    .clk(clk) {
+        .rst(rst) {
+            dff state[$width(State)]
+            dff waddr [$clog2(CAPTURE_DEPTH)]                      // write address
+        }
+        dff data_old[DATA_WIDTH]                                 // old data for edge detection
+        dff trigger_data[4*DATA_WIDTH]
+        pipeline arm_sync (#DEPTH(2))
+        pipeline force_sync (#DEPTH(2))
+    }
+
+    .clk(data_scan.tck) {
+        dff raddr [CAPTURE_DEPTH == 1 ? 1 :$clog2(CAPTURE_DEPTH)]                      // read address
+        dff offset[DATA_WIDTH == 1 ? 1 : $clog2(DATA_WIDTH)]
+        dff rdata[DATA_WIDTH]
+    }
+
+    .clk(capture_scan.tck) {
+        pipeline status_sync (#DEPTH(2))
+        .rst(!capture_scan.sel) {
+            dff force
+        }
+    }
+
+    simple_dual_port_ram ram (#WIDTH(DATA_WIDTH), #ENTRIES(CAPTURE_DEPTH), .rclk(data_scan.tck), .wclk(clk))
+
+    sig trigger_type[DATA_WIDTH][4]
+
+    always {
+        /* Info Scan - full JTAG clock domain */
+        if (info_scan.sel) {
+            if (info_scan.capture) {
+                status.d = c{$resize(VERSION,8), $resize(CAPTURE_DEPTH,32), $resize(DATA_WIDTH,32), $resize(NONCE,32)}
+            } else if (info_scan.shift) {
+                status.d = c{status.q[0], status.q[-1:1]}
+            }
+        }
+        info_scan.tdo = status.q[0]
+
+        /* Config Scan */
+        // JTAG clock domain
+        config_fifo.din = config_scan.tdi
+        config_fifo.wput = config_scan.shift & config_scan.sel
+        config_scan.tdo = 0
+
+        // system clock domain
+        config_fifo.rget = 1
+        if (!config_fifo.empty)
+            trigger_data.d = c{config_fifo.dout, trigger_data.q[-1:1]}
+
+        /* Data Scan */
+        // system clock domain
+        ram.waddr = waddr.q                                      // connect RAM ports
+        ram.write_data = data
+        ram.write_enable = 0
+
+        data_old.d = data
+
+        trigger_type = $build(trigger_data.q, DATA_WIDTH)
+
+        case (state.q) {
+            State.IDLE:
+                waddr.d = 0
+
+                if (arm_sync.out)
+                    state.d = State.ARMED
+
+            State.ARMED:                                            // armed and waiting for a trigger
+                sig triggered = 1                                        // assume triggered
+
+                // Check if each signal meets trigger requirements, if any don't triggered is set to 0
+                repeat (i, DATA_WIDTH){
+                    triggered = triggered & (
+                        (trigger_type[i][0] && data_old.q[i] == 0 && data[i] == 1) || // rise
+                        (trigger_type[i][1] && data_old.q[i] == 1 && data[i] == 0) || // fall
+                        (trigger_type[i][2] && data[i] == 0) ||                       // low
+                        (trigger_type[i][3] && data[i] == 1) ||                       // high
+                        trigger_type[i] == 4b0)                                      // no trigger
+                }
+
+                if (triggered || force_sync.out) {                    // if a trigger occured (or forced by JTAG)
+                    ram.write_enable = 1                                   // capture the current data
+                    state.d = State.FIRED                              // switch to FIRED state
+                    waddr.d = waddr.q + 1                              // advance the write address
+                }
+
+            State.FIRED:                                            // capturing data
+                waddr.d = waddr.q + 1                                // advance the write address
+                ram.write_enable = 1                                     // capture the current data
+                if (waddr.q == CAPTURE_DEPTH - 1) {                   // if we are at the last sample
+                    state.d = State.CAPTURED                           // switch to CAPTURED state
+                }
+        }
+
+        // JTAG clock domain
+        ram.raddr = raddr.q
+        data_scan.tdo = rdata.q[0]
+        if (data_scan.sel) {
+            if (data_scan.capture) {
+                rdata.d = ram.read_data
+                raddr.d = raddr.q + 1
+                offset.d = 0
+            } else if (data_scan.shift) {
+                rdata.d = c{1b0, rdata.q[-1:1]}
+                offset.d = offset.q + 1
+                if (offset.q == DATA_WIDTH-1) {
+                    offset.d = 0
+                    rdata.d = ram.read_data
+                    raddr.d = raddr.q + 1
+                }
+            } else {
+                raddr.d = 0
+            }
+        }
+
+        /* Capture Scan */
+        // system clock domain
+        status_sync.in = state.q == State.CAPTURED
+
+        // JTAG clock domain
+        capture_scan.tdo = status_sync.out
+        arm_sync.in = 0
+        force_sync.in = force.q
+        if (capture_scan.sel) {
+            arm_sync.in = capture_scan.shift | capture_scan.capture
+            if (capture_scan.shift) {
+                force.d = force.q | capture_scan.tdi
+            }
+        }
+    }
+}

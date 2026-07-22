@@ -14,8 +14,10 @@ import com.alchitry.labs2.parsers.hdl.types.Signal
 import com.alchitry.labs2.parsers.notations.NotationCollector
 import com.alchitry.labs2.parsers.notations.NotationManager
 import com.alchitry.labs2.project.Project
+import com.alchitry.labs2.project.Project.Companion.parseAll
 import com.alchitry.labs2.project.files.FileProvider
 import com.alchitry.labs2.project.files.SourceFile
+import com.alchitry.labs2.project.library.ComponentLibrary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.antlr.v4.kotlinruntime.CharStreams
@@ -90,7 +92,7 @@ class Probe(private val project: Project) {
         this.clock = clock
     }
 
-    fun buildProbeProject() {
+    suspend fun buildProbeProject() {
         val context = projectContext ?: error("buildSignalTree() must be called before buildProbeProject()!")
         val top = context.top ?: error("Top level module missing from project context!")
         val selectedSignals = selectedSignals ?: error("setProbeData() must be called before buildProbeProject()!")
@@ -98,7 +100,12 @@ class Probe(private val project: Project) {
         val clock = clock ?: error("setProbeData() must be called before buildProbeProject()!")
 
         val probedSignalTree = buildSignalTree(selectedSignals)
-        val debugModules = mutableListOf<LucidParser.ModuleContext>()
+        val debugModules = mutableListOf<Pair<SourceFile, LucidParser.SourceContext>>()
+
+        val probeComponentName = when (project.data.board) {
+            Board.AlchitryAu, Board.AlchitryAuPlus, Board.AlchitryAuV2, Board.AlchitryPtV2 -> "xilinx_probe"
+            Board.AlchitryCu, Board.AlchitryCuV2 -> error("Cu is currently unsupported!")
+        }
 
         fun addDebugFileForModule(currentTree: SignalTree) {
             val instance = currentTree.module
@@ -133,19 +140,16 @@ class Probe(private val project: Project) {
                 moduleBodyChildren.add(moduleBodyChildren.size - 1, alwaysBlock)
             } else {
                 val probeModuleInstance = parseLucid(buildString {
-                    when (project.data.board) {
-                        Board.AlchitryAu, Board.AlchitryAuPlus, Board.AlchitryAuV2, Board.AlchitryPtV2 -> append("xilinx_probe lucid_probe ")
-                        Board.AlchitryCu, Board.AlchitryCuV2 -> error("Cu is currently unsupported!")
-                    }
-                    append("(#DEPTH(")
+                    append("$probeComponentName lucid_probe ")
+                    append("(#CAPTURE_DEPTH(")
                     append(sampleDepth)
-                    append("), #WIDTH(")
+                    append("), #DATA_WIDTH(")
                     append(totalBits)
                     append("), .clk(")
                     append(clock.signal.qualifiedNameInInstance(instance))
                     append("), .data(c{")
                     val signals =
-                        probedSignals.map { it.signal.qualifiedNameInInstance(instance) } + probedModules.map { "${it.module.probeName}.probe_signals" }
+                        probedSignals.map { it.signal.qualifiedNameInInstance(instance) } + probedModules.map { "${it.module.name}.probe_signals" }
                     signals.forEachIndexed { index, node ->
                         if (index != 0)
                             append(", ")
@@ -169,6 +173,7 @@ class Probe(private val project: Project) {
                             val children = ctx.children!!
                             val instanceName = children[children.indexOf(ctx.name(1) as ParseTree)].text
                             val branch = probedModules.firstOrNull { it.module.name == instanceName } ?: return
+                            println("Using name ${branch.module.probeName}")
                             children[0] = parseLucid(branch.module.probeName) { it.name() }
                             addDebugFileForModule(branch)
                         }
@@ -177,11 +182,41 @@ class Probe(private val project: Project) {
                 context
             )
 
-            debugModules.add(context)
+            val sourceContext = LucidParser.SourceContext().apply { children = mutableListOf(context) }
+
+            println("Adding file with name ${instance.probeName}")
+            debugModules.add(
+                SourceFile(
+                    FileProvider.StringFile(instance.probeName + ".luc", ""),
+                    top = instance == top
+                ) to sourceContext
+            )
             Log.println(context.text)
         }
 
         addDebugFileForModule(probedSignalTree)
+
+        val probeComponent = ComponentLibrary.components.first { it.name == "$probeComponentName.luc" }
+        val requiredComponents = probeComponent.allDependencies() + listOf(probeComponent)
+        val componentSourceFiles = requiredComponents.map { SourceFile(it) }
+
+        val sourceFiles = (project.data.sourceFiles + project.ipCoreStubs + componentSourceFiles).toMutableSet()
+        sourceFiles.removeIf { it.top }
+
+        val notationManager = NotationManager()
+        // reverse and add debug modules first to make the top module first
+        val parsedTrees = debugModules.asReversed() + (parseAll(sourceFiles, notationManager)
+            ?: error("Failed to parse project's files!"))
+
+        val projectContext = project.buildContext(
+            notationManager,
+            parsedTrees
+        )
+        if (projectContext == null) {
+            Log.println(notationManager.getReport())
+            error("Failed to build project context!")
+        }
+        project.build(projectContext)
     }
 
 }
@@ -258,7 +293,11 @@ private fun totalProbedBitsFor(tree: SignalTree): Int {
 }
 
 private val ModuleInstance.probeName: String
-    get() = "${module.name}_${hashCode().toHexString()}_probe"
+    get() {
+        if (module.name == "alchitry_top")
+            return module.name
+        return "${module.name}_${hashCode().toHexString()}_probe"
+    }
 
 fun Signal.qualifiedNameInInstance(moduleInstance: ModuleInstance): String = buildString {
     if (parent != null && parent !is LocalSignal && parent != moduleInstance) {

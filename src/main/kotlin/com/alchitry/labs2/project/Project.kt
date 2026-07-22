@@ -508,7 +508,7 @@ data class Project(
 
     suspend fun buildContext(
         notationManager: NotationManager,
-        parsedTrees: List<Pair<SourceFile, LucidParser.SourceContext>>? = null,
+        parsedTrees: List<Pair<SourceFile, ParserRuleContext>>? = null,
         mode: ProjectMode = ProjectMode.Default
     ): ProjectContext? {
         val projectContext = ProjectContext(notationManager, data.board, mode)
@@ -566,7 +566,7 @@ data class Project(
             if (notationManager.hasErrors)
                 return null
 
-            val topModule = modules.firstOrNull { it.first == top }?.second
+            val topModule = modules.firstOrNull { it.first.top }?.second
 
             if (topModule == null) {
                 notationManager.getCollector(top)

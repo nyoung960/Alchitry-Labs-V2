@@ -36,5 +36,18 @@ sealed class ProjectFile(val file: FileProvider) {
     }
 
     suspend fun toCharStream(): CharStream = CharStreams.fromString(readText(), name)
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+
+        other as ProjectFile
+
+        return file == other.file
+    }
+
+    override fun hashCode(): Int {
+        return file.hashCode()
+    }
 }
 
