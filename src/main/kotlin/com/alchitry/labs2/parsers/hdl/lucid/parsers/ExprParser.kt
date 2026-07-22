@@ -1,5 +1,6 @@
 package com.alchitry.labs2.parsers.hdl.lucid.parsers
 
+import com.alchitry.labs2.parsers.ProjectMode
 import com.alchitry.labs2.parsers.grammar.LucidParser.*
 import com.alchitry.labs2.parsers.grammar.SuspendLucidBaseListener
 import com.alchitry.labs2.parsers.hdl.*
@@ -525,7 +526,7 @@ class ExprParser(
 
         when (function) {
             Function.IS_SIMULATION -> {
-                val bit = if (context.project.simulating) Bit.B1 else Bit.B0
+                val bit = if (context.project.mode == ProjectMode.Simulating) Bit.B1 else Bit.B0
                 evaluator.setExpr(ctx, bit.toBitValue().asConstExpr())
             }
 

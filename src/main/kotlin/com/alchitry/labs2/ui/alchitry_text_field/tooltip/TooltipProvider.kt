@@ -62,7 +62,7 @@ class NotationTooltipProvider(
 ) : TooltipProvider<Notation>(codeEditor) {
 
     override fun tokenFromPosition(position: Offset): Notation? {
-        return codeEditor.notations?.firstOrNull { it.range.contains(codeEditor.screenOffsetToTextPosition(position)) }
+        return codeEditor.notations.firstOrNull { it.range.contains(codeEditor.screenOffsetToTextPosition(position)) }
             ?.let { if (it.message == null) null else it }
     }
 

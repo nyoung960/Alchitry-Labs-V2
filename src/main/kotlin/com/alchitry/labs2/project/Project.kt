@@ -8,6 +8,7 @@ import com.alchitry.labs2.Analytics
 import com.alchitry.labs2.Log
 import com.alchitry.labs2.Settings
 import com.alchitry.labs2.parsers.ProjectContext
+import com.alchitry.labs2.parsers.ProjectMode
 import com.alchitry.labs2.parsers.acf.AcfExtractor
 import com.alchitry.labs2.parsers.acf.NativeConstraint
 import com.alchitry.labs2.parsers.acf.acfConverter
@@ -35,7 +36,6 @@ import com.alchitry.labs2.project.files.Component
 import com.alchitry.labs2.project.files.FileProvider
 import com.alchitry.labs2.project.files.ProjectFile
 import com.alchitry.labs2.project.files.SourceFile
-import com.alchitry.labs2.project.probe.Probe
 import com.alchitry.labs2.ui.alchitry_text_field.TextPosition
 import com.alchitry.labs2.ui.alchitry_text_field.line_actions.LineActionButton
 import com.alchitry.labs2.ui.tabs.FileTab
@@ -90,7 +90,6 @@ data class Project(
     val moduleMapFlow = mutableModuleMapFlow.asStateFlow()
 
     val projectFiles = (data.sourceFiles + data.constraintFiles + data.ipCores.mapNotNull { it.stub })
-    val probe = Probe(this)
 
     init {
         projectFiles.forEach { fileProvider ->
@@ -326,9 +325,9 @@ data class Project(
         }
     }
 
-    suspend fun check(simulating: Boolean = false): ProjectContext? {
+    suspend fun check(mode: ProjectMode = ProjectMode.Default): ProjectContext? {
         val notationManager = NotationManager()
-        val context = buildContext(notationManager, simulating = simulating)
+        val context = buildContext(notationManager, mode = mode)
         val topModule = context?.top
         if (context == null || topModule == null) {
             Log.print(notationManager.getReport())
@@ -510,9 +509,9 @@ data class Project(
     suspend fun buildContext(
         notationManager: NotationManager,
         parsedTrees: List<Pair<SourceFile, LucidParser.SourceContext>>? = null,
-        simulating: Boolean = false
+        mode: ProjectMode = ProjectMode.Default
     ): ProjectContext? {
-        val projectContext = ProjectContext(notationManager, data.board, simulating)
+        val projectContext = ProjectContext(notationManager, data.board, mode)
         var success = false
         val trees = parsedTrees ?: parseAll(data.sourceFiles + ipCoreStubs, notationManager)
 

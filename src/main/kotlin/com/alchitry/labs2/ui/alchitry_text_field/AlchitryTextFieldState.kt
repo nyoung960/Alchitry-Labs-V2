@@ -351,7 +351,7 @@ class AlchitryTextFieldState(
 
         lineOffsetCache = null
         tokenizer?.let { tokenizer ->
-            tokens = tokenizer.getTokens(lines.toCharStream()) ?: emptyList()
+            tokens = tokenizer.getTokens(lines.toCharStream())
             styler.updateStyle()
         }
         updateHighlightTokens()

@@ -35,7 +35,8 @@ object AcfTokenizer : TextTokenizer {
                     )
                 )
 
-                val bracketOffset = text.indexOf("{") ?: return@forEach
+                val bracketOffset = text.indexOf("{")
+                if (bracketOffset < 0) return@forEach
 
                 newTokens.add(
                     EditorToken(

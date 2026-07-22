@@ -26,7 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import org.apache.commons.lang3.StringUtils
+import org.apache.commons.lang3.Strings
 import kotlin.coroutines.cancellation.CancellationException
 
 data class Suggestion(val nextText: String, val quality: Int, val range: OpenEndRange<TextPosition>)
@@ -201,7 +201,7 @@ abstract class Autocomplete {
         protected fun calculateEditDistance(str: String, key: String): Int? {
             val letters = key.toCharArray()
             if (letters.isNotEmpty()) {
-                var offset = StringUtils.indexOfIgnoreCase(str, letters[0].toString())
+                var offset = Strings.CI.indexOf(str, letters[0].toString())
                 if (offset == -1) return null
 
                 offset++
@@ -211,7 +211,7 @@ abstract class Autocomplete {
                 if (letters[0] != str[offset - 1]) edit++
 
                 for (i in 1..<letters.size) {
-                    val idx = StringUtils.indexOfIgnoreCase(str, letters[i].toString(), offset)
+                    val idx = Strings.CI.indexOf(str, letters[i].toString(), offset)
                     if (idx == -1 || idx == str.length) return null
 
                     edit += (idx - offset) * 100

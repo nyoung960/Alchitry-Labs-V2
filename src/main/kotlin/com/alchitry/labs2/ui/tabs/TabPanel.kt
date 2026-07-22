@@ -117,7 +117,7 @@ class TabPanel(parent: TabParent) : TabSection(parent) {
                             }
                         }
                     }
-                    Divider(thickness = 1.dp, color = MaterialTheme.colorScheme.background)
+                    HorizontalDivider(Modifier, thickness = 1.dp, color = MaterialTheme.colorScheme.background)
 
                     context.PanelDropContainer(
                         onDropped = { tab, region ->
@@ -236,10 +236,10 @@ private fun Tab(
             }
             if (active) {
                 Box(Modifier.matchParentSize()) {
-                    Divider(
+                    HorizontalDivider(
                         Modifier.align(Alignment.BottomCenter),
-                        color = AlchitryColors.current.Accent,
-                        thickness = 2.dp
+                        thickness = 2.dp,
+                        color = AlchitryColors.current.Accent
                     )
                 }
             }

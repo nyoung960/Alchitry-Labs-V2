@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.alchitry.hardware.Board
 import com.alchitry.hardware.usb.BoardLoader
 import com.alchitry.labs2.*
+import com.alchitry.labs2.parsers.ProjectMode
 import com.alchitry.labs2.project.Project
 import com.alchitry.labs2.project.library.VivadoIP
 import com.alchitry.labs2.ui.components.AlchitryToolbarIcon
@@ -424,7 +425,18 @@ fun LabsToolbar() {
         }
 
         var showProbeSignalSelectionDialog by remember { mutableStateOf(false) }
-        ProbeSignalSelectorDialog(showProbeSignalSelectionDialog) { showProbeSignalSelectionDialog = false }
+        ProbeSignalSelectorDialog(showProbeSignalSelectionDialog) { probe ->
+            showProbeSignalSelectionDialog = false
+            if (probe == null)
+                return@ProbeSignalSelectorDialog
+            runWithProject {
+                try {
+                    probe.buildProbeProject()
+                } catch (e: Exception) {
+                    Log.printlnError(e.message, e)
+                }
+            }
+        }
         ToolbarButton(
             icon = painterResource("icons/inspect.svg"),
             description = "Inspect internal signals",
@@ -443,7 +455,7 @@ fun LabsToolbar() {
                     "simulate_project",
                     mapOf("board" to JsonPrimitive(project.data.board.name))
                 )
-                val context = project.check(simulating = true) ?: return@runWithProject
+                val context = project.check(mode = ProjectMode.Simulating) ?: return@runWithProject
                 val existingTab = Workspace.getTabs().firstOrNull { it is BoardSimulationTab }
                 val tabPanel = existingTab?.parent ?: Workspace.activeTabPanel()
                 try {

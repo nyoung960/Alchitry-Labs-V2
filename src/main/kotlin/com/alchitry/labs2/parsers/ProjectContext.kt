@@ -20,7 +20,17 @@ import kotlinx.coroutines.*
 import java.io.Closeable
 import java.util.concurrent.ConcurrentHashMap
 
-class ProjectContext(val notationManager: NotationManager, val board: Board, val simulating: Boolean = false) :
+enum class ProjectMode {
+    Default,
+    Probe,
+    Simulating
+}
+
+class ProjectContext(
+    val notationManager: NotationManager,
+    val board: Board,
+    val mode: ProjectMode = ProjectMode.Default
+) :
     Closeable {
     var top: ModuleInstance? = null
     private val constraints = mutableListOf<Constraint>()

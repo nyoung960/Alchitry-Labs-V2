@@ -14,8 +14,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import com.alchitry.labs2.Log
 import com.alchitry.labs2.painterResource
 import com.alchitry.labs2.project.Project
+import com.alchitry.labs2.project.probe.Probe
 import com.alchitry.labs2.project.probe.SignalNode
 import com.alchitry.labs2.project.probe.SignalTree
 import com.alchitry.labs2.project.probe.SignalTreeNode
@@ -29,16 +31,18 @@ import com.alchitry.labs2.ui.tree.TreeItem
 import com.alchitry.labs2.ui.tree.TreeSection
 
 @Composable
-fun ProbeSignalSelectorDialog(visible: Boolean, onClose: (SignalTree?) -> Unit) {
+fun ProbeSignalSelectorDialog(visible: Boolean, onClose: (Probe?) -> Unit) {
     AlchitryDialog(visible, "Inspector Signal Selection", resizable = true, onClose = { onClose(null) }) {
+        var probe: Probe? by remember { mutableStateOf(null) }
         var fullSignalTree: SignalTree? by remember { mutableStateOf(null) }
         val project by Project.currentFlow.collectAsState()
         LaunchedEffect(project) {
-            fullSignalTree = project?.probe?.getProbableSignals()
+            probe = project?.let { Probe(it) }
+            fullSignalTree = probe?.buildSignalTree()
         }
 
-
         val selectedSignals = remember { mutableStateListOf<SignalNode>() }
+        var sampleDepthTextFieldValue by remember { mutableStateOf(TextFieldValue("256")) }
 
         Column(Modifier.size(700.dp, 500.dp).background(MaterialTheme.colorScheme.background)) {
             Box(Modifier.weight(1f)) {
@@ -152,12 +156,12 @@ fun ProbeSignalSelectorDialog(visible: Boolean, onClose: (SignalTree?) -> Unit) 
             }
             Column(Modifier.background(MaterialTheme.colorScheme.surface)) {
                 Row {
-                    var textFieldValue by remember { mutableStateOf(TextFieldValue("256")) }
+
                     TextField(
-                        value = textFieldValue,
+                        value = sampleDepthTextFieldValue,
                         onValueChange = { newValue ->
                             if (newValue.text.all { it.isDigit() }) {
-                                textFieldValue = newValue
+                                sampleDepthTextFieldValue = newValue
                             }
                         },
                         label = { Text("Max Sample Depth") },
@@ -165,7 +169,7 @@ fun ProbeSignalSelectorDialog(visible: Boolean, onClose: (SignalTree?) -> Unit) 
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
-                            val number = textFieldValue.text.toIntOrNull()
+                            val number = sampleDepthTextFieldValue.text.toIntOrNull()
                             val powerOfTwo = number != null && number > 0 && number.countOneBits() == 1
                             AnimatedVisibility(!powerOfTwo && number != null, enter = fadeIn(), exit = fadeOut()) {
                                 TextTooltipArea(
@@ -183,8 +187,28 @@ fun ProbeSignalSelectorDialog(visible: Boolean, onClose: (SignalTree?) -> Unit) 
                                 }
                             }
                         },
-                        isError = textFieldValue.text.toIntOrNull() == null
+                        isError = sampleDepthTextFieldValue.text.toIntOrNull() == null
                     )
+                }
+                Button(onClick = {
+                    val clockSignal =
+                        fullSignalTree?.children?.firstOrNull { (it as? SignalNode)?.signal?.name == "clk" } as? SignalNode
+                    if (clockSignal == null) {
+                        Log.error("Failed to find \"clk\" signal at top level!")
+                        onClose(null)
+                        return@Button
+                    }
+                    onClose(
+                        probe?.apply {
+                            setProbeData(
+                                selectedSignals = selectedSignals.toList(),
+                                sampleDepth = sampleDepthTextFieldValue.text.toIntOrNull() ?: 0,
+                                clock = clockSignal
+                            )
+                        }
+                    )
+                }) {
+                    Text("Start Inspector")
                 }
             }
         }

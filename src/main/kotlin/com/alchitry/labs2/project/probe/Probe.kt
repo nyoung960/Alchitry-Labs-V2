@@ -1,20 +1,46 @@
 package com.alchitry.labs2.project.probe
 
+import com.alchitry.hardware.Board
+import com.alchitry.labs2.Log
+import com.alchitry.labs2.parsers.ParseTreeMultiWalker
+import com.alchitry.labs2.parsers.ProjectContext
+import com.alchitry.labs2.parsers.ProjectMode
+import com.alchitry.labs2.parsers.grammar.LucidLexer
+import com.alchitry.labs2.parsers.grammar.LucidParser
+import com.alchitry.labs2.parsers.hdl.types.LocalSignal
 import com.alchitry.labs2.parsers.hdl.types.ModuleInstance
 import com.alchitry.labs2.parsers.hdl.types.ModuleInstanceArray
 import com.alchitry.labs2.parsers.hdl.types.Signal
+import com.alchitry.labs2.parsers.notations.NotationCollector
 import com.alchitry.labs2.parsers.notations.NotationManager
 import com.alchitry.labs2.project.Project
+import com.alchitry.labs2.project.files.FileProvider
+import com.alchitry.labs2.project.files.SourceFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.antlr.v4.kotlinruntime.CharStreams
+import org.antlr.v4.kotlinruntime.CommonTokenStream
+import org.antlr.v4.kotlinruntime.ParserRuleContext
+import org.antlr.v4.kotlinruntime.tree.ErrorNode
+import org.antlr.v4.kotlinruntime.tree.ParseTree
+import org.antlr.v4.kotlinruntime.tree.ParseTreeListener
+import org.antlr.v4.kotlinruntime.tree.TerminalNode
 
 class Probe(private val project: Project) {
-    suspend fun getProbableSignals(): SignalTree = withContext(Dispatchers.Default) {
-        val notationManager = NotationManager()
-        val context = project.buildContext(notationManager, simulating = false)
-        val topModule = context?.top
+    private var projectContext: ProjectContext? = null
+    var selectedSignals: List<SignalNode>? = null
+        private set
+    var sampleDepth: Int = 0
+        private set
+    var clock: SignalNode? = null
+        private set
 
-        if (context == null || topModule == null) {
+    suspend fun buildSignalTree(): SignalTree = withContext(Dispatchers.Default) {
+        val notationManager = NotationManager()
+        projectContext = project.buildContext(notationManager, mode = ProjectMode.Probe)
+        val topModule = projectContext?.top
+
+        if (projectContext == null || topModule == null) {
             error("Failed to parse project!")
         }
 
@@ -42,47 +68,202 @@ class Probe(private val project: Project) {
                             children.add(buildTree(submoduleInstance, currentTree))
                         }
 
-                        is ModuleInstanceArray -> submoduleInstance.modules.forEach { subSubModule ->
-                            subSubModule.external.values.forEach {
+                        is ModuleInstanceArray -> {
+                            submoduleInstance.external.values.forEach {
                                 if (it.direction.canRead) children.add(
-                                    SignalNode(
-                                        it,
-                                        currentTree
-                                    )
+                                    SignalNode(it, currentTree)
                                 )
                             }
-                            children.add(buildTree(subSubModule, currentTree))
+                            // TODO: Add support for inside module arrays
                         }
                     }
                 }
                 return@SignalTree children
             }
 
-        val tree = buildTree(topModule, null)
-        println(tree)
+        return@withContext buildTree(topModule, null)
+    }
 
-        return@withContext tree
+    fun setProbeData(selectedSignals: List<SignalNode>, sampleDepth: Int, clock: SignalNode) {
+        this.selectedSignals = selectedSignals
+        this.sampleDepth = sampleDepth
+        this.clock = clock
+    }
+
+    fun buildProbeProject() {
+        val context = projectContext ?: error("buildSignalTree() must be called before buildProbeProject()!")
+        val top = context.top ?: error("Top level module missing from project context!")
+        val selectedSignals = selectedSignals ?: error("setProbeData() must be called before buildProbeProject()!")
+        val sampleDepth = sampleDepth
+        val clock = clock ?: error("setProbeData() must be called before buildProbeProject()!")
+
+        val probedSignalTree = buildSignalTree(selectedSignals)
+        val debugModules = mutableListOf<LucidParser.ModuleContext>()
+
+        fun addDebugFileForModule(currentTree: SignalTree) {
+            val instance = currentTree.module
+            val context = instance.moduleContext.deepCopy() as? LucidParser.ModuleContext
+                ?: error("Probed module context wasn't a Lucid module!")
+            val probedSignals = currentTree.children.filterIsInstance<SignalNode>()
+            val probedModules = currentTree.children.filterIsInstance<SignalTree>()
+
+            // Replace module name
+            context.children!![context.children!!.indexOfFirst { it is LucidParser.NameContext }] =
+                parseLucid(instance.probeName, { it.name() })
+
+            val totalBits = totalProbedBitsFor(currentTree)
+
+            if (instance !== top) {
+                val portTree = parseLucid("output probe_signals[$totalBits]") { it.portDec() }
+                context.portList()!!.children!!.add(1, portTree)
+
+                val alwaysBlock = parseLucid(buildString {
+                    append("always probe_signals = c{")
+                    probedSignals.forEachIndexed { index, node ->
+                        if (index != 0)
+                            append(", ")
+                        append($$"$flatten(")
+                        append(node.signal.qualifiedNameInInstance(instance))
+                        append(")")
+                    }
+                    append("};")
+                }) { it.stat() }
+
+                val moduleBodyChildren = context.moduleBody()!!.children!!
+                moduleBodyChildren.add(moduleBodyChildren.size - 1, alwaysBlock)
+            } else {
+                val probeModuleInstance = parseLucid(buildString {
+                    when (project.data.board) {
+                        Board.AlchitryAu, Board.AlchitryAuPlus, Board.AlchitryAuV2, Board.AlchitryPtV2 -> append("xilinx_probe lucid_probe ")
+                        Board.AlchitryCu, Board.AlchitryCuV2 -> error("Cu is currently unsupported!")
+                    }
+                    append("(#DEPTH(")
+                    append(sampleDepth)
+                    append("), #WIDTH(")
+                    append(totalBits)
+                    append("), .clk(")
+                    append(clock.signal.qualifiedNameInInstance(instance))
+                    append("), .data(c{")
+                    val signals =
+                        probedSignals.map { it.signal.qualifiedNameInInstance(instance) } + probedModules.map { "${it.module.probeName}.probe_signals" }
+                    signals.forEachIndexed { index, node ->
+                        if (index != 0)
+                            append(", ")
+                        append($$"$flatten(")
+                        append(node)
+                        append(")")
+                    }
+                    appendLine("}))")
+                }) { it.stat() }
+                val moduleBodyChildren = context.moduleBody()!!.children!!
+                moduleBodyChildren.add(moduleBodyChildren.size - 1, probeModuleInstance)
+            }
+
+            ParseTreeMultiWalker.walk(
+                listOf(object : ParseTreeListener {
+                    override fun visitTerminal(node: TerminalNode) {}
+                    override fun visitErrorNode(node: ErrorNode) {}
+                    override fun enterEveryRule(ctx: ParserRuleContext) {}
+                    override fun exitEveryRule(ctx: ParserRuleContext) {
+                        if (ctx is LucidParser.ModuleInstContext) {
+                            val children = ctx.children!!
+                            val instanceName = children[children.indexOf(ctx.name(1) as ParseTree)].text
+                            val branch = probedModules.firstOrNull { it.module.name == instanceName } ?: return
+                            children[0] = parseLucid(branch.module.probeName) { it.name() }
+                            addDebugFileForModule(branch)
+                        }
+                    }
+                }),
+                context
+            )
+
+            debugModules.add(context)
+            Log.println(context.text)
+        }
+
+        addDebugFileForModule(probedSignalTree)
+    }
+
+}
+
+
+private fun parseLucid(lucid: String, runRule: (LucidParser) -> ParserRuleContext): ParserRuleContext {
+    val notationCollector = NotationCollector(SourceFile(FileProvider.StringFile("probe.luc", "")))
+    val context = LucidParser(
+        CommonTokenStream(
+            LucidLexer(
+                CharStreams.fromString(lucid, "probe_parser")
+            ).apply {
+                removeErrorListeners()
+                addErrorListener(notationCollector)
+            })
+    ).apply {
+        removeErrorListeners()
+        addErrorListener(notationCollector)
+    }.run { runRule(this) }
+    require(notationCollector.hasNoErrors) {
+        notationCollector.getReport()?.text ?: "Probe generated code contained errors!"
+    }
+    return context
+}
+
+private fun buildSignalTree(selectedSignals: List<SignalNode>): SignalTree {
+    require(selectedSignals.isNotEmpty()) { "selectedSignals must not be empty" }
+
+    // Find the root of the original tree
+    var root: SignalTree = selectedSignals.first().parent
+    while (root.parent != null) root = root.parent
+
+    // Collect all SignalTree nodes that are ancestors of selected signals
+    val requiredTrees = mutableSetOf<SignalTree>()
+    for (signal in selectedSignals) {
+        var current: SignalTree? = signal.parent
+        while (current != null) {
+            if (!requiredTrees.add(current)) break
+            current = current.parent
+        }
+    }
+
+    fun rebuildTree(original: SignalTree, newParent: SignalTree?): SignalTree =
+        SignalTree(original.module, newParent) { currentTree ->
+            val children = mutableListOf<SignalTreeNode>()
+            for (child in original.children) {
+                when (child) {
+                    is SignalNode -> {
+                        if (child in selectedSignals) {
+                            children.add(SignalNode(child.signal, currentTree))
+                        }
+                    }
+
+                    is SignalTree -> {
+                        if (child in requiredTrees) {
+                            children.add(rebuildTree(child, currentTree))
+                        }
+                    }
+                }
+            }
+            children
+        }
+
+    return rebuildTree(root, null)
+}
+
+private fun totalProbedBitsFor(tree: SignalTree): Int {
+    return tree.children.sumOf {
+        when (it) {
+            is SignalNode -> it.signal.width.bitCount ?: error("Bit count was undefined for ${it.signal}")
+            is SignalTree -> totalProbedBitsFor(it)
+        }
     }
 }
 
-sealed interface SignalTreeNode
+private val ModuleInstance.probeName: String
+    get() = "${module.name}_${hashCode().toHexString()}_probe"
 
-class SignalTree(
-    val module: ModuleInstance,
-    val parent: SignalTree?,
-    childrenBuilder: (SignalTree) -> List<SignalTreeNode>
-) : SignalTreeNode {
-    val children: List<SignalTreeNode> = childrenBuilder(this)
-    override fun toString(): String {
-        return "SignalTree(module=$module, children=$children)"
+fun Signal.qualifiedNameInInstance(moduleInstance: ModuleInstance): String = buildString {
+    if (parent != null && parent !is LocalSignal && parent != moduleInstance) {
+        append(parent!!.name)
+        append(".")
     }
-}
-
-class SignalNode(
-    val signal: Signal,
-    val parent: SignalTree
-) : SignalTreeNode {
-    override fun toString(): String {
-        return "SignalNode(signal=$signal)"
-    }
+    append(name)
 }

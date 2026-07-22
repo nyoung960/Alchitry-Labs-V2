@@ -20,6 +20,7 @@ import com.alchitry.labs2.Log
 import com.alchitry.labs2.hardware.pinout.AuPin
 import com.alchitry.labs2.painterResource
 import com.alchitry.labs2.parsers.ProjectContext
+import com.alchitry.labs2.parsers.ProjectMode
 import com.alchitry.labs2.parsers.acf.types.Constraint
 import com.alchitry.labs2.parsers.hdl.types.ModuleInstance
 import com.alchitry.labs2.parsers.hdl.types.SignalOrSubSignal
@@ -56,7 +57,7 @@ class ProjectSimulator(private val projectContext: ProjectContext) : Closeable {
     private var running by mutableStateOf(false)
 
     init {
-        check(projectContext.simulating) { "Project context passed to ProjectSimulator wasn't marked as \"simulating\"." }
+        check(projectContext.mode == ProjectMode.Simulating) { "Project context passed to ProjectSimulator wasn't marked as \"simulating\"." }
         val constraints = projectContext.getConstraints().filterIsInstance<Constraint.PinConstraint>()
         val clkConstraint = constraints.firstOrNull { it.pin.name == AuPin.CLOCK.name }
 
