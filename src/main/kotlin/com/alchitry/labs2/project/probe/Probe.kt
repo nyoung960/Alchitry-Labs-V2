@@ -173,7 +173,6 @@ class Probe(private val project: Project) {
                             val children = ctx.children!!
                             val instanceName = children[children.indexOf(ctx.name(1) as ParseTree)].text
                             val branch = probedModules.firstOrNull { it.module.name == instanceName } ?: return
-                            println("Using name ${branch.module.probeName}")
                             children[0] = parseLucid(branch.module.probeName) { it.name() }
                             addDebugFileForModule(branch)
                         }
@@ -184,14 +183,12 @@ class Probe(private val project: Project) {
 
             val sourceContext = LucidParser.SourceContext().apply { children = mutableListOf(context) }
 
-            println("Adding file with name ${instance.probeName}")
             debugModules.add(
                 SourceFile(
                     FileProvider.StringFile(instance.probeName + ".luc", ""),
                     top = instance == top
                 ) to sourceContext
             )
-            Log.println(context.text)
         }
 
         addDebugFileForModule(probedSignalTree)
