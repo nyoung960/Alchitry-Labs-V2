@@ -224,6 +224,32 @@ class SystemVerilogConverter(
         }
     }
 
+    override fun exitStructDec(ctx: LucidParser.StructDecContext) {
+        val name = ctx.name()?.text ?: error("Failed to get struct name!")
+        val struct = context.resolveStruct(name) ?: error("Failed to resolve struct with name \"$name\"!")
+        ctx.verilog = buildString {
+            append("typedef struct packed {")
+            tabCount++
+            struct.values.forEach { member ->
+                newLine()
+                append("logic ")
+                if (member.signed) {
+                    append("signed ")
+                }
+                member.width.firstStructType()?.appendSpaceIfNotBlank()?.let { append(it) }
+                append(member.width.verilogArrayWidths().appendSpaceIfNotBlank())
+                append(member.name.sanitize())
+                append(";")
+            }
+            tabCount--
+            newLine()
+            append("} ")
+            append(struct.name)
+            append(";")
+            newLine()
+        }
+    }
+
     private fun getVerilogForConstant(signal: Signal) = buildString {
         append("localparam ")
 
