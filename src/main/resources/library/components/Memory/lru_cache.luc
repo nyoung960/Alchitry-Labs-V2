@@ -119,7 +119,7 @@ module lru_cache #(
     sig handled
     sig oldest_entry[ENTRIES > 1 ? $clog2(ENTRIES) : 1]
     sig entry[ENTRIES > 1 ? $clog2(ENTRIES) : 1]
-    sig max_age[$width(age.q, 1)]
+    sig max_age[$width(age.q[0])]
 
     always {
         mem_in.enable = 0

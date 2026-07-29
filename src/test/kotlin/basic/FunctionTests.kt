@@ -29,21 +29,31 @@ class FunctionTests {
 
     @Test
     fun multiDimWidthTest() = runBlocking {
-        val tester = SimpleLucidTester("{\$width({8b1, 8b1},1),\$width({8b1, 8b1},0)}")
-        val ctx = tester.parser.expr().also { tester.context.walk(it) }
-
-        assert(tester.hasNoIssues)
-
-        val v = tester.context.resolve(ctx)
-        assertEquals(
-            ArrayValue(
-                listOf(
-                    BitListValue(2, 4, signed = false),
-                    BitListValue(8, 4, signed = false),
-                )
-            ).asConstExpr(),
-            v
+        val test = ProjectTester(
+            $$"""
+            module alchitry_top(
+                input clk,
+                output junk
+            ) {
+                const MULTI = {8b1, 8b1}
+                const DIM0 = $width(MULTI)
+                const DIM1 = $width(MULTI[0])
+                
+                always {
+                    junk = clk + DIM0 + DIM1
+                }
+            }
+            """.trimIndent().toSourceFile()
         )
+
+        val tree = test.fullParse(ExprEvalMode.Default)
+        val dim0 = tree.context.resolveSignal(tree.moduleContext, "DIM0") as? Signal
+        val dim1 = tree.context.resolveSignal(tree.moduleContext, "DIM1") as? Signal
+
+        assert(test.notationManager.hasNoIssues) { test.notationManager.getReport() }
+
+        assertEquals(BitListValue(2, signed = false), dim0?.read())
+        assertEquals(BitListValue(8, signed = false), dim1?.read())
     }
 
     @Test

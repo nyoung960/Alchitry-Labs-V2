@@ -17,8 +17,8 @@ module greeter (
             dff state[$width(States)]
         }
         // we need our counters to be large enough to store all the indices of our text
-        dff hello_count[$clog2($width(HELLO_TEXT, 0))]
-        dff prompt_count[$clog2($width(PROMPT_TEXT, 0))]
+        dff hello_count[$clog2($width(HELLO_TEXT))]
+        dff prompt_count[$clog2($width(PROMPT_TEXT))]
 
         dff name_count[5] // 5 allows for 2^5 = 32 letters
         // we need our RAM to have an entry for every value of name_count
@@ -48,7 +48,7 @@ module greeter (
                     prompt_count.d = prompt_count.q + 1   // move to the next letter
                     new_tx = 1                            // send data
                     tx_data = PROMPT_TEXT[prompt_count.q] // send letter from PROMPT_TEXT
-                    if (prompt_count.q == $width(PROMPT_TEXT, 0) - 1) // no more letters
+                    if (prompt_count.q == $width(PROMPT_TEXT) - 1) // no more letters
                         state.d = States.LISTEN           // change states
                 }
 
@@ -93,7 +93,7 @@ module greeter (
                     }
 
                     // if we have sent all of HELLO_TEXT
-                    if (hello_count.q == $width(HELLO_TEXT, 0) - 1)
+                    if (hello_count.q == $width(HELLO_TEXT) - 1)
                         state.d = States.IDLE // return to IDLE
                 }
         }
