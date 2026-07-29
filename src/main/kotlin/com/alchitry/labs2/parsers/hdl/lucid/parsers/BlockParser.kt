@@ -211,8 +211,14 @@ data class BlockParser(
                 return
             }
             if (values.contains(condition.value)) {
-                context.reportError(caseExprCtx, "The case value ${condition.value} is already used.")
+                context.reportError(caseExprCtx, "The case value \"${condition.value}\" is already used.")
                 return@forEach
+            }
+            if ((condition.value.width.bitCount ?: 1) > (value.value.width.bitCount ?: 1)) {
+                context.reportWarning(
+                    caseExprCtx,
+                    "The case value \"${condition.value}\" is wider than the case expression."
+                )
             }
             values.add(condition.value)
         }
