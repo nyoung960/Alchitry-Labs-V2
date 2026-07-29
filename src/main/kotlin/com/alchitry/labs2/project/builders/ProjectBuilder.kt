@@ -6,6 +6,7 @@ import com.alchitry.labs2.Settings
 import com.alchitry.labs2.project.Project
 import com.alchitry.labs2.ui.theme.AlchitryColors
 import kotlinx.coroutines.*
+import kotlinx.coroutines.future.await
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -15,6 +16,8 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.pathString
 import kotlin.io.path.relativeTo
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 val Board.projectBuilder: ProjectBuilder
     get() = when (this) {
@@ -128,12 +131,20 @@ sealed class ProjectBuilder {
 
             try {
                 while (process.isAlive)
-                    delay(100)
+                    delay(100.milliseconds)
 
                 inputStreamJob.join()
                 errorStreamJob.join()
             } catch (e: CancellationException) {
-                process.destroyForcibly()
+                val onExit = process.onExit()
+                process.destroy()
+                try {
+                    withTimeout(1.seconds) {
+                        onExit.await()
+                    }
+                } catch (_: TimeoutCancellationException) {
+                    process.destroyForcibly()
+                }
                 throw e
             }
             return process.exitValue()

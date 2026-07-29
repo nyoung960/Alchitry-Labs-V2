@@ -1,5 +1,8 @@
 package com.alchitry.labs2.ui.toolbars
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -29,10 +32,7 @@ import com.alchitry.labs2.ui.tabs.Workspace
 import com.alchitry.labs2.ui.theme.AlchitryColors
 import com.alchitry.labs2.ui.theme.AlchitryTheme
 import com.alchitry.labs2.windows.LocalLabsState
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.math.roundToInt
 
@@ -57,6 +57,8 @@ fun LabsToolbar() {
         lockedDialogDeferred?.complete(result)
         lockedDialogDeferred = null
     }
+
+    var runningJob by remember { mutableStateOf<Job?>(null) }
 
     Row {
         AlchitryToolbarIcon()
@@ -224,7 +226,7 @@ fun LabsToolbar() {
                 Log.println("Project must be open first!", AlchitryColors.current.Error)
                 return
             }
-            scope.launch(Dispatchers.Default) {
+            runningJob = scope.launch(Dispatchers.Default) {
                 Project.withBuildLock {
                     try {
                         block(currentProj)
@@ -232,6 +234,8 @@ fun LabsToolbar() {
                         if (e is CancellationException)
                             throw e
                         Log.printlnError(e.message)
+                    } finally {
+                        runningJob = null
                     }
                 }
             }
@@ -464,6 +468,16 @@ fun LabsToolbar() {
                 } catch (e: IllegalStateException) {
                     Log.error(e.message)
                 }
+            }
+        }
+
+        AnimatedVisibility(runningJob != null, enter = fadeIn(), exit = fadeOut()) {
+            ToolbarButton(
+                icon = painterResource("icons/cancel.svg"),
+                description = "Cancel Current Action",
+                enabled = runningJob != null
+            ) {
+                runningJob?.cancel()
             }
         }
     }
