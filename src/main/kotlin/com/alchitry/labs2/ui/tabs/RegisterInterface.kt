@@ -169,7 +169,10 @@ class RegisterInterface(
 
     @Composable
     override fun label() {
-        Text("Register Interface")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PulsingLink(state)
+            Text("Register Interface")
+        }
     }
 
     @Composable

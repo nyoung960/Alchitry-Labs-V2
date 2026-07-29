@@ -208,7 +208,8 @@ private fun Tab(
                 Modifier
                     .padding(8.dp)
                     .alpha(if (hovering || dragging) 1f else 0.8f),
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 tab.label()
                 val alpha by animateValueAsState(

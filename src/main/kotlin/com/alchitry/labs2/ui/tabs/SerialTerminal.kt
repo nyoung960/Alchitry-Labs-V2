@@ -1,5 +1,7 @@
 package com.alchitry.labs2.ui.tabs
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -7,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -16,6 +19,7 @@ import com.alchitry.hardware.usb.UsbUtil
 import com.alchitry.labs2.Log
 import com.alchitry.labs2.painterResource
 import com.alchitry.labs2.ui.alchitry_text_field.Console
+import com.alchitry.labs2.ui.components.AlchitryToolTip
 import com.alchitry.labs2.ui.components.DeviceSelector
 import com.alchitry.labs2.ui.components.ToolbarButton
 import com.alchitry.labs2.ui.isAwtTypedEvent
@@ -127,7 +131,10 @@ class SerialTerminal(
 
     @Composable
     override fun label() {
-        Text("Serial Terminal")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PulsingLink(state)
+            Text("Serial Terminal")
+        }
     }
 
     @Composable
@@ -167,5 +174,35 @@ class SerialTerminal(
     override fun onClose(save: Boolean): Boolean {
         state.scope.cancel("Tab closed.")
         return true
+    }
+}
+
+@Composable
+fun PulsingLink(serialState: SerialState) {
+    AnimatedVisibility(
+        serialState.connected,
+        enter = fadeIn() + expandHorizontally(),
+        exit = fadeOut() + shrinkHorizontally()
+    ) {
+        val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
+        val pulsingAlpha by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "alpha_animation"
+        )
+        AlchitryToolTip({ Text("Connection active") }) {
+            Icon(
+                painterResource("icons/link.svg"),
+                contentDescription = "Connected",
+                modifier = Modifier.padding(end = 5.dp).graphicsLayer {
+                    alpha = pulsingAlpha
+                },
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
