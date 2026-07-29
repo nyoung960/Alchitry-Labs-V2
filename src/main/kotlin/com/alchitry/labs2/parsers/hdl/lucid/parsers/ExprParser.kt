@@ -537,6 +537,7 @@ class ExprParser(
                     context.reportError(ctx.functionExpr(2) ?: ctx, "\$width accepts at most two arguments.")
                     return
                 }
+
                 val dimArg = valArgs.getOrNull(1)
                 if (dimArg != null) {
                     val dimType = evaluator.resolve(functionExprCtxs[1])?.type
@@ -548,32 +549,24 @@ class ExprParser(
                         )
                         return
                     }
-                }
-                val width = arg.value.width
-                if (!width.isSimpleArray()) {
-                    context.reportError(
-                        ctx.functionExpr(0) ?: ctx,
-                        "The function \"$${Function.WIDTH.label}()\" can't be used on structs."
-                    )
-                    return
-                }
-                val widthType = if (width.isDefined()) ExprType.Constant else ExprType.Fixed
-                val widthValue = width.toValue()
-                if (dimArg == null && widthValue is ArrayValue) {
-                    context.reportError(
-                        ctx.functionExpr(0) ?: ctx,
-                        "The value \"${ctx.functionExpr(0)?.text}\" has a multidimensional width but a dimension was not specified."
-                    )
-                    return
-                }
-                val value = if (dimArg != null) {
+                    val width = arg.value.width
+                    if (!width.isSimpleArray()) {
+                        context.reportError(
+                            ctx.functionExpr(0) ?: ctx,
+                            "The function \"$${Function.WIDTH.label}()\" can't be used on structs."
+                        )
+                        return
+                    }
+                    val widthType = if (width.isDefined()) ExprType.Constant else ExprType.Fixed
+                    val widthValue = width.toValue()
+
                     if (!dimArg.value.isNumber()) {
                         context.reportError(ctx.functionExpr(1) ?: ctx, "The dimension argument must be a number.")
                         return
                     }
                     val dimInt = (dimArg.value as SimpleValue).toBigInt()!!.toInt()
 
-                    if (widthValue !is ArrayValue) {
+                    val value = if (widthValue !is ArrayValue) {
                         if (dimInt != 0) {
                             context.reportError(
                                 ctx.functionExpr(1) ?: ctx,
@@ -591,9 +584,39 @@ class ExprParser(
                             return
                         }
                     }
-                } else widthValue
 
-                evaluator.setExpr(ctx, value.asExpr(widthType))
+                    val dimSuffix = "[0]".repeat(dimInt)
+                    context.reportWarning(
+                        ctx.functionExpr(1) ?: ctx,
+                        $$"The dimensional argument for $width() is deprecated. This will be an error in a future release.\n\nConsider replacing this with \"$width($${
+                            ctx.functionExpr(
+                                0
+                            )?.text
+                        }$$dimSuffix)\""
+                    )
+
+                    evaluator.setExpr(ctx, value.asExpr(widthType))
+                } else {
+                    val width = arg.value.width
+                    val value = when (width) {
+                        is DefinedSimpleWidth -> BitListValue(width.size, signed = false)
+                        is DefinedArrayWidth -> BitListValue(width.size, signed = false)
+                        is StructWidth -> {
+                            context.reportError(
+                                ctx.functionExpr(0) ?: ctx,
+                                "The function \"$${Function.WIDTH.label}()\" can't be used on structs."
+                            )
+                            return
+                        }
+
+                        is UndefinedWidth -> UndefinedValue(UndefinedSimpleWidth())
+                    }
+                    val widthType = when (width) {
+                        is DefinedSimpleWidth, is DefinedArrayWidth -> ExprType.Constant
+                        is UndefinedWidth -> ExprType.Fixed
+                    }
+                    evaluator.setExpr(ctx, value.asExpr(widthType))
+                }
             }
 
             Function.FIXEDPOINT, Function.CFIXEDPOINT, Function.FFIXEDPOINT -> {
@@ -853,7 +876,8 @@ class ExprParser(
                         if (valArgs[0].value is UndefinedValue) {
                             UndefinedValue(
                                 DefinedSimpleWidth(
-                                    valArgs[0].value.width.bitCount ?: error("Failed to get bit count. Should be impossible.")
+                                    valArgs[0].value.width.bitCount
+                                        ?: error("Failed to get bit count. Should be impossible.")
                                 )
                             )
                         } else {
