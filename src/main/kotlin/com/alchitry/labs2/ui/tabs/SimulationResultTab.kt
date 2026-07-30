@@ -31,7 +31,8 @@ import androidx.compose.ui.unit.dp
 import com.alchitry.labs2.parsers.hdl.lucid.signals.snapshot.SimParent
 import com.alchitry.labs2.ui.components.HSash
 import com.alchitry.labs2.ui.components.ResizePriority
-import com.alchitry.labs2.ui.components.rememberSashData
+import com.alchitry.labs2.ui.components.SashData
+import com.alchitry.labs2.ui.components.SashSize
 import com.alchitry.labs2.ui.waveform.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -42,6 +43,12 @@ class SimulationResultTab(
     private val result: SimParent,
     override var parent: TabPanel
 ) : Tab {
+    val waveform = result.toWaveformParent()
+    val verticalScroll = ScrollState(0)
+    val horizontalScroll = ScrollState(0)
+    var waveScale by mutableStateOf(50.dp)
+    val sashData = SashData(ResizePriority.SECOND, SashSize(1f, 1f), 50f to 50f)
+
     @Composable
     override fun label() {
         Text("$name Results")
@@ -50,11 +57,7 @@ class SimulationResultTab(
     @OptIn(ExperimentalComposeUiApi::class)
     @Composable
     override fun content() {
-        val waveform = remember { result.toWaveformParent() }
         var firstlayout by remember { mutableStateOf(true) }
-        val sashData = rememberSashData(ResizePriority.SECOND)
-        val verticalScroll = rememberScrollState()
-        var waveScale by remember { mutableStateOf(50.dp) }
 
         var dragging by remember { mutableStateOf(false) }
         val tracker = remember { VelocityTracker() }
@@ -91,7 +94,6 @@ class SimulationResultTab(
                     }
                 },
                 right = {
-                    val horizontalScroll = rememberScrollState()
                     val scope = rememberCoroutineScope()
                     var cursor by remember { mutableStateOf<Offset?>(null) }
 
