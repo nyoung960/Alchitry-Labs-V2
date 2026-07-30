@@ -26,7 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
-fun <T> DragAndDropContext<T>.Draggable(
+fun <T> DragAndDropContext<T>.SimpleDraggable(
     item: T,
     onMoved: () -> Unit,
     onDragging: (Boolean) -> Unit = {},

@@ -97,7 +97,7 @@ class TabPanel(parent: TabParent) : TabSection(parent) {
                         tabs.forEach { tab ->
                             key(tab) {
                                 var dragging by remember { mutableStateOf(false) }
-                                context.Draggable(tab, onMoved = {
+                                context.SimpleDraggable(tab, onMoved = {
                                     removeTab(tab)
                                     dragging = false
                                 }, onDragging = { dragging = it }) {

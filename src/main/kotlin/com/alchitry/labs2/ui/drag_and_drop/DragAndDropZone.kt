@@ -21,12 +21,25 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+enum class DragAnchor {
+    Center,
+    KeepOffset
+}
+
+enum class DragDirection {
+    Any,
+    HorizontalOnly,
+    VerticalOnly
+}
+
 @Composable
 fun <T : Any> DragAndDropZone(
     modifier: Modifier = Modifier,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     verticalArrangement: Arrangement.Vertical = Arrangement.Top,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
+    dragAnchor: DragAnchor = DragAnchor.Center,
+    dragDirection: DragDirection = DragDirection.Any,
     footer: @Composable DragAndDropContext<T>.() -> Unit = {},
     block: @Composable DragAndDropContext<T>.() -> Unit
 ) {
@@ -42,6 +55,9 @@ fun <T : Any> DragAndDropZone(
     var dragSize by remember { mutableStateOf(IntSize(0, 0)) }
     val dragWidth = remember { Animatable(0f) }
     var position by remember { mutableStateOf(Offset(0f, 0f)) }
+    var dragAnchorOffset by remember { mutableStateOf(Offset.Zero) }
+    var dragLockedX by remember { mutableStateOf(0f) }
+    var dragLockedY by remember { mutableStateOf(0f) }
 
     var bounds by remember { mutableStateOf(0f..0f) }
     val scope = rememberCoroutineScope()
@@ -70,21 +86,49 @@ fun <T : Any> DragAndDropZone(
                 size: IntSize,
                 origPosition: Offset
             ) {
-                draggingComposable = content
                 dragSize = size
-                scope.launch {
-                    dragXOffset.snapTo(origPosition.x)
-                    dragWidth.snapTo(size.width.toFloat())
-                    dragAlpha.snapTo(0.6f)
-                }
-                scope.launch {
-                    dragPosition.snapTo(origPosition + (dragSize / 2).let {
-                        Offset(
-                            it.width.toFloat(),
-                            it.height.toFloat()
-                        )
-                    })
-                    dragPosition.animateTo(offset)
+                when (dragAnchor) {
+                    DragAnchor.Center -> {
+                        dragAnchorOffset = Offset.Zero
+                        dragLockedX = origPosition.x + dragSize.width / 2f
+                        dragLockedY = origPosition.y + dragSize.height / 2f
+                        scope.launch {
+                            dragXOffset.snapTo(origPosition.x)
+                            dragWidth.snapTo(size.width.toFloat())
+                            dragAlpha.snapTo(0.6f)
+                            dragPosition.snapTo(origPosition + (dragSize / 2).let {
+                                Offset(
+                                    it.width.toFloat(),
+                                    it.height.toFloat()
+                                )
+                            })
+                            draggingComposable = content
+                            dragPosition.animateTo(offset)
+                        }
+                    }
+
+                    DragAnchor.KeepOffset -> {
+                        val rawOffset = offset - origPosition - Offset(dragSize.width / 2f, dragSize.height / 2f)
+                        dragAnchorOffset = when (dragDirection) {
+                            DragDirection.Any -> rawOffset
+                            DragDirection.HorizontalOnly -> rawOffset.copy(y = 0f)
+                            DragDirection.VerticalOnly -> rawOffset.copy(x = 0f)
+                        }
+                        dragLockedX = origPosition.x + dragSize.width / 2f
+                        dragLockedY = origPosition.y + dragSize.height / 2f
+                        val constrainedStart = when (dragDirection) {
+                            DragDirection.Any -> offset
+                            DragDirection.HorizontalOnly -> Offset(offset.x, dragLockedY)
+                            DragDirection.VerticalOnly -> Offset(dragLockedX, offset.y)
+                        }
+                        scope.launch {
+                            dragXOffset.snapTo(origPosition.x)
+                            dragWidth.snapTo(size.width.toFloat())
+                            dragAlpha.snapTo(0.6f)
+                            dragPosition.snapTo(constrainedStart)
+                            draggingComposable = content
+                        }
+                    }
                 }
                 dragOrigPosition = origPosition
                 activeDroppable = null
@@ -94,10 +138,15 @@ fun <T : Any> DragAndDropZone(
             }
 
             override fun onDragged(offset: Offset) {
+                val constrainedOffset = when (dragDirection) {
+                    DragDirection.Any -> offset
+                    DragDirection.HorizontalOnly -> Offset(offset.x, dragLockedY)
+                    DragDirection.VerticalOnly -> Offset(dragLockedX, offset.y)
+                }
                 val lastDroppable = activeDroppable
                 activeDroppable = null
                 droppables.forEach {
-                    if (it.onDragged(offset, dragSize, activeDroppable != null))
+                    if (it.onDragged(constrainedOffset, dragSize, activeDroppable != null))
                         activeDroppable = it
                 }
 
@@ -107,7 +156,7 @@ fun <T : Any> DragAndDropZone(
                     scope.launch { dragWidth.animateTo(activeBounds?.width ?: dragSize.width.toFloat()) }
                 }
 
-                scope.launch { dragPosition.snapTo(offset) }
+                scope.launch { dragPosition.snapTo(constrainedOffset) }
             }
 
             override fun hasDropZone(): Boolean {
@@ -145,7 +194,7 @@ fun <T : Any> DragAndDropZone(
                                 it.width.toFloat(),
                                 it.height.toFloat()
                             )
-                        })
+                        } + dragAnchorOffset)
                     }
 
                     if (activeDroppable != null) {
@@ -205,6 +254,7 @@ fun <T : Any> DragAndDropZone(
             dragSize = dragSize,
             dragAlpha = dragAlpha,
             dragPosition = dragPosition,
+            dragAnchorOffset = dragAnchorOffset,
             onHeightChanged = {
                 dragSize = IntSize(dragSize.width, it)
             },
@@ -220,6 +270,7 @@ private fun <T : Any> DragContent(
     dragSize: IntSize,
     dragAlpha: Animatable<Float, AnimationVector1D>,
     dragPosition: Animatable<Offset, AnimationVector2D>,
+    dragAnchorOffset: Offset = Offset.Zero,
     onHeightChanged: (Int) -> Unit,
     dragContent: (@Composable DragAndDropContext<T>.() -> Unit)?
 ) {
@@ -240,7 +291,7 @@ private fun <T : Any> DragContent(
                                     intSize.width,
                                     intSize.height
                                 )
-                            }
+                            } - IntOffset(dragAnchorOffset.x.roundToInt(), dragAnchorOffset.y.roundToInt())
                         }
                     }
             ) {

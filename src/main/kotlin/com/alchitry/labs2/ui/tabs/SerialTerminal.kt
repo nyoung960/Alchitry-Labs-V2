@@ -39,6 +39,7 @@ class SerialState {
 @Composable
 fun SerialTerminalToolbar(
     state: SerialState,
+    modifier: Modifier = Modifier,
     withDevice: suspend (SerialDevice) -> Unit
 ) {
     val labsState = LocalLabsState.current
@@ -46,10 +47,8 @@ fun SerialTerminalToolbar(
     var attachedToBoard by labsState.attachedToBoard
 
     Row(
-        Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(20.dp))
-            .padding(10.dp),
+        modifier
+            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(20.dp)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -143,7 +142,7 @@ class SerialTerminal(
             Box(Modifier.fillMaxSize())
             Column {
 
-                SerialTerminalToolbar(state) { device ->
+                SerialTerminalToolbar(state, Modifier.fillMaxWidth().padding(10.dp)) { device ->
                     val buffer = ByteArray(1024)
 
                     coroutineScope {
