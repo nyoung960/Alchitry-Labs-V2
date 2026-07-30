@@ -19,7 +19,9 @@ import androidx.compose.ui.unit.dp
 import com.alchitry.labs2.painterResource
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.awt.Cursor
+import kotlin.coroutines.resume
 
 class RegisterRow(
     val address: Int,
@@ -105,19 +107,21 @@ class RegisterRow(
                             if (watchJob == null) {
                                 running = true
                                 watchJob = scope.launch {
-                                    fun onComplete(value: Int?) {
-                                        if (value != null) {
-                                            valueState = valueState.withNewValue(value)
-                                            scope.launch {
-                                                onRequest(RegisterRequest.BasicRead(address, { onComplete(it) }))
-                                            }
-                                        } else {
-                                            watchJob = null
-                                            running = false
+                                    var value: Int? = suspendCancellableCoroutine { cont ->
+                                        launch {
+                                            onRequest(RegisterRequest.BasicRead(address) { cont.resume(it) })
                                         }
-
                                     }
-                                    onRequest(RegisterRequest.BasicRead(address, { onComplete(it) }))
+                                    while (value != null) {
+                                        valueState = valueState.withNewValue(value)
+                                        value = suspendCancellableCoroutine { cont ->
+                                            launch {
+                                                onRequest(RegisterRequest.BasicRead(address) { cont.resume(it) })
+                                            }
+                                        }
+                                    }
+                                    watchJob = null
+                                    running = false
                                 }
                             } else {
                                 watchJob?.cancel()
