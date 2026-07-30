@@ -1,6 +1,5 @@
 package com.alchitry.labs2.ui.drag_and_drop
 
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.AnimationVector2D
@@ -55,7 +54,7 @@ fun <T> DragAndDropContext<T>.DropZone(
     LocalDensity.current.run {
 
         val animatedSize = remember { Animatable(IntSize.Zero, IntSize.VectorConverter) }
-        val animatedAlpha = remember { Animatable(1f) }
+        val animatedAlpha = remember { Animatable(0f) }
 
         val droppable = remember {
             object : Droppable<T> {
@@ -94,6 +93,7 @@ fun <T> DragAndDropContext<T>.DropZone(
                     dragSize: IntSize,
                     dragAlpha: Animatable<Float, AnimationVector1D>,
                     dragPosition: Animatable<Offset, AnimationVector2D>,
+                    dragAnchorOffset: Offset,
                     scope: CoroutineScope
                 ) {
                     dragActive = false
@@ -109,7 +109,7 @@ fun <T> DragAndDropContext<T>.DropZone(
                                 Offset(
                                     bounds.left + dragSize.width / 2f,
                                     bounds.top + dragSize.height / 2f
-                                )
+                                ) + dragAnchorOffset
                             )
                         }
                     }
@@ -148,7 +148,7 @@ fun <T> DragAndDropContext<T>.DropZone(
         // Nested boxes are needed to accurately capture the size with padding
         Box(
             Modifier
-                .alpha(animatedAlpha.value)
+                //.alpha(animatedAlpha.value)
                 .onGloballyPositioned {
                     bounds = it.boundsInRoot()
                     dragBounds = Rect(
@@ -159,25 +159,24 @@ fun <T> DragAndDropContext<T>.DropZone(
                     )
                 }
         ) {
-
-            Crossfade(targetState = hover to dragActive) {
-                val mod = when {
-                    it.first -> hoverModifier
-                    it.second -> activeModifier
-                    else -> inactiveModifier
+            val mod = when {
+                hover -> hoverModifier
+                dragActive -> activeModifier
+                else -> inactiveModifier
+            }
+            Box(
+                Modifier
+                    .defaultMinSize(
+                        animatedSize.value.width.toDp().coerceAtLeast(minimumSize.width),
+                        animatedSize.value.height.toDp().coerceAtLeast(minimumSize.height)
+                    )
+                    .then(mod),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(Modifier.alpha(1f - animatedAlpha.value)) {
+                    content()
                 }
-                Box(
-                    Modifier
-                        .defaultMinSize(
-                            animatedSize.value.width.toDp().coerceAtLeast(minimumSize.width),
-                            animatedSize.value.height.toDp().coerceAtLeast(minimumSize.height)
-                        )
-                        .then(mod),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (!it.first)
-                        content()
-                }
+                Box(Modifier.matchParentSize().alpha(animatedAlpha.value).then(mod))
             }
         }
     }

@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -25,13 +26,19 @@ import androidx.compose.ui.zIndex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
+/**
+ * A draggable composable that provides a drag handle modifier via the content lambda.
+ * Only the element with the [dragHandleModifier] applied will initiate drags.
+ * The pointer detection stays on the outer container, so it survives the composable
+ * being replaced by a spacer during the drag.
+ */
 @Composable
 fun <T> DragAndDropContext<T>.Draggable(
     item: T,
     onMoved: () -> Unit,
     onDragging: (Boolean) -> Unit = {},
     enabled: Boolean = true,
-    content: @Composable DragAndDropContext<T>.() -> Unit
+    content: @Composable DragAndDropContext<T>.(dragHandleModifier: Modifier) -> Unit
 ) {
     var dragging by remember { mutableStateOf(false) }
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -44,6 +51,14 @@ fun <T> DragAndDropContext<T>.Draggable(
     val scope = rememberCoroutineScope()
 
     var otherDragging by remember { mutableStateOf(false) }
+
+    // Track the drag handle bounds in root coordinates
+    var handleBounds by remember { mutableStateOf<Rect?>(null) }
+
+    // Content composable without the handle modifier, used for the drag overlay
+    val contentForOverlay: @Composable DragAndDropContext<T>.() -> Unit = {
+        content(Modifier)
+    }
 
     DisposableEffect(item) {
         val droppable = object : Droppable<T> {
@@ -63,6 +78,7 @@ fun <T> DragAndDropContext<T>.Draggable(
                 dragSize: IntSize,
                 dragAlpha: Animatable<Float, AnimationVector1D>,
                 dragPosition: Animatable<Offset, AnimationVector2D>,
+                dragAnchorOffset: Offset,
                 scope: CoroutineScope
             ) {
             }
@@ -84,6 +100,10 @@ fun <T> DragAndDropContext<T>.Draggable(
         }
     }
 
+    val dragHandleModifier = Modifier.onGloballyPositioned {
+        handleBounds = it.boundsInRoot()
+    }
+
     Box(
         Modifier
             .zIndex(1f)
@@ -91,12 +111,19 @@ fun <T> DragAndDropContext<T>.Draggable(
                 size = it.size
                 position = it.positionInRoot()
             }
-            .pointerInput(item, otherDragging, enabled) { // maybe need height in the list
+            .pointerInput(item, otherDragging, enabled) {
                 if (!otherDragging && enabled)
                     detectDragGestures(
                         onDragStart = {
+                            // it is the local position within this Box
+                            val rootPos = it + position
+                            val bounds = handleBounds
+                            if (bounds != null && !bounds.contains(rootPos)) {
+                                // Touch started outside the handle — cancel immediately
+                                throw kotlinx.coroutines.CancellationException("Outside drag handle")
+                            }
                             dragging = true
-                            onDragStart(content, it + position, size, position)
+                            onDragStart(contentForOverlay, rootPos, size, position)
                             onDragging(true)
                             scope.launch {
                                 animatedSize.snapTo(size)
@@ -134,47 +161,11 @@ fun <T> DragAndDropContext<T>.Draggable(
                         }
                     )
             }
-//            .draggable(
-//                enabled = enabled && !otherDragging,
-//                startDragImmediately = false,
-//                orientation = Orientation.Horizontal,
-//                onDragStarted = {
-//                    scope.launch { animatedOffset.snapTo(0f) }
-//                },
-//                onDragStopped = { velocity ->
-//                    // Velocity is in pixels per second, but we deal in percentage offsets, so we
-//                    // need to scale the velocity to match
-//                    scope.launch {
-//                        val spec = exponentialDecay<Float>(
-//                            frictionMultiplier = 4f,
-//                            absVelocityThreshold = density * 10f
-//                        )
-//                        val target = spec.calculateTargetValue(animatedOffset.value, velocity)
-//                        if (target.absoluteValue <= 0.8f * size.width) {
-//                            animatedOffset.animateDecay(velocity, spec)
-//                            animatedOffset.animateTo(0f)
-//                        } else {
-//                            animatedOffset.animateTo(size.width.toFloat() * animatedOffset.targetValue.sign)
-//                            dragging = true
-//                            animatedHeight.snapTo(size.height.toFloat())
-//                            animatedHeight.animateTo(0f)
-//
-//                            onMoved()
-//                        }
-//                    }
-//                },
-//                state = rememberDraggableState { dragAmount ->
-//                    scope.launch {
-//                        animatedOffset.snapTo(animatedOffset.targetValue + dragAmount)
-//                    }
-//                }
-//            )
     ) {
         if (dragging)
             Spacer(
                 Modifier
                     .size(animatedSize.value.let { DpSize(it.width.dp, it.height.dp) / density })
-
             )
         else
             Box(
@@ -182,7 +173,7 @@ fun <T> DragAndDropContext<T>.Draggable(
                     .offset(x = (animatedOffset.value / density).dp)
                     .alpha((1f - animatedOffset.value / size.width.toFloat()).coerceIn(0f, 1f))
             ) {
-                content()
+                content(dragHandleModifier)
             }
     }
 }

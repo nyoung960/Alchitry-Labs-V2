@@ -183,7 +183,7 @@ fun <T : Any> DragAndDropZone(
                             it.onDroppedStarted()
                     }
                     if (active != null) {
-                        active.onDroppedStarted(dragSize, dragAlpha, dragPosition, scope)
+                        active.onDroppedStarted(dragSize, dragAlpha, dragPosition, dragAnchorOffset, scope)
                     } else {
                         scope.launch {
                             dragAlpha.animateTo(1f)

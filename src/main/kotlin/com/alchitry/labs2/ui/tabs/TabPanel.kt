@@ -100,8 +100,8 @@ class TabPanel(parent: TabParent) : TabSection(parent) {
                                 context.Draggable(tab, onMoved = {
                                     removeTab(tab)
                                     dragging = false
-                                }, onDragging = { dragging = it }) {
-                                    Row {
+                                }, onDragging = { dragging = it }) { dragModifier ->
+                                    Row(dragModifier) {
                                         Tab(
                                             tab,
                                             activeTab === tab,

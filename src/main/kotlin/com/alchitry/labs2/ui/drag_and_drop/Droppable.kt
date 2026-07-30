@@ -15,6 +15,7 @@ interface Droppable<T> {
         dragSize: IntSize,
         dragAlpha: Animatable<Float, AnimationVector1D>,
         dragPosition: Animatable<Offset, AnimationVector2D>,
+        dragAnchorOffset: Offset,
         scope: CoroutineScope
     )
 

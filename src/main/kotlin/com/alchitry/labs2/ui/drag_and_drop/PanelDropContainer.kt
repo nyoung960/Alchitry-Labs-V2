@@ -79,6 +79,7 @@ fun <T> DragAndDropContext<T>.PanelDropContainer(
                 dragSize: IntSize,
                 dragAlpha: Animatable<Float, AnimationVector1D>,
                 dragPosition: Animatable<Offset, AnimationVector2D>,
+                dragAnchorOffset: Offset,
                 scope: CoroutineScope
             ) {
                 scope.launch {
