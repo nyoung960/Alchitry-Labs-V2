@@ -20,7 +20,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.alchitry.labs2.painterResource
 import com.alchitry.labs2.ui.drag_and_drop.DragAndDropContext
-import com.alchitry.labs2.ui.drag_and_drop.SimpleDraggable
+import com.alchitry.labs2.ui.drag_and_drop.Draggable
 import java.awt.Cursor
 
 class RegisterRow(
@@ -32,7 +32,7 @@ class RegisterRow(
     context(dndContext: DragAndDropContext<RegisterRow>)
     fun Draw() {
         key(this) {
-            dndContext.SimpleDraggable(this, onMoved = {}) {
+            dndContext.Draggable(this, onMoved = {}) {
                 Row(
                     Modifier.background(MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp))
                         .height(IntrinsicSize.Max),
