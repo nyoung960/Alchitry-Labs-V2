@@ -417,16 +417,26 @@ fun LabsToolbar() {
             description = "Erase",
             enabled = !running && boardDetected && !attachedToBoard
         )
-        IconMenu(painterResource("icons/terminal.svg"), "Tools", enabled = !running) {
-            MenuItem({ Text("Serial Terminal") }) {
+
+        ToolbarButton(
+            onClick = {
                 Analytics.trackEvent("open_serial_terminal")
                 Workspace.focusOrAddTab { SerialTerminal(it) }
-            }
-            MenuItem({ Text("Register Interface") }) {
+            },
+            icon = painterResource("icons/terminal.svg"),
+            description = "Serial Terminal",
+            enabled = !running
+        )
+
+        ToolbarButton(
+            onClick = {
                 Analytics.trackEvent("open_register_interface")
                 Workspace.focusOrAddTab { RegisterInterface(it) }
-            }
-        }
+            },
+            icon = painterResource("icons/memory.svg"),
+            description = "Register Interface",
+            enabled = !running
+        )
 
         var showProbeSignalSelectionDialog by remember { mutableStateOf(false) }
         ProbeSignalSelectorDialog(showProbeSignalSelectionDialog) { probe ->
