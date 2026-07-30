@@ -440,7 +440,7 @@ data class ExprEvaluator<T : ParserRuleContext>(
         }
 
         if (!expr.value.isNumber()) {
-            exprs[ctx] = BitListValue(size = widthContext.width, signed = false) { Bit.Bx }.asExpr(expr.type)
+            exprs[ctx] = BitListValue(size = widthContext.width, signed = true) { Bit.Bx }.asExpr(expr.type)
             return
         }
 
@@ -451,7 +451,7 @@ data class ExprEvaluator<T : ParserRuleContext>(
                 negatedValue.minBits(true)
             } else expr.value.size
 
-        exprs[ctx] = BitListValue(negatedValue, true, width).asExpr(expr.type)
+        exprs[ctx] = BitListValue(negatedValue, signed = true, width).asExpr(expr.type)
     }
 
     /**

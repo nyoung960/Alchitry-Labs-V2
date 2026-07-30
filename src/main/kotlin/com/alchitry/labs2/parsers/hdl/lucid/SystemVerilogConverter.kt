@@ -22,6 +22,7 @@ import com.alchitry.labs2.project.builders.projectBuilder
 import kotlinx.coroutines.runBlocking
 import org.antlr.v4.kotlinruntime.ParserRuleContext
 import org.antlr.v4.kotlinruntime.tree.ParseTree
+import java.math.BigInteger
 import kotlin.math.absoluteValue
 
 class SystemVerilogConverter(
@@ -1293,11 +1294,11 @@ class SystemVerilogConverter(
             ctx.expr() is LucidParser.ExprNumContext &&
             negBits != exprBits
         ) {
-            ctx.verilog = "-(($negBits)'(\$signed(${ctxExpr.verilog})))"
+            ctx.verilog = $$"$signed(-(($$negBits)'($${ctxExpr.verilog})))"
             return
         }
 
-        ctx.verilog = "-${ctxExpr.verilog}"
+        ctx.verilog = $$"$signed(-$${ctxExpr.verilog})"
     }
 
     override fun exitExprGroup(ctx: LucidParser.ExprGroupContext) {
@@ -1775,7 +1776,8 @@ fun Value.toVerilog(): String {
         is SimpleValue -> buildString {
             if (!width.isDefined())
                 error("Can't convert undefined width value to Verilog!")
-            append(width.bitCount)
+            val bitCount = width.bitCount ?: error("Missing bitCount on value!")
+            append(bitCount)
             append("'")
             if (signed)
                 append("s")
@@ -1783,8 +1785,9 @@ fun Value.toVerilog(): String {
                 append("h")
                 val bigInt = toBigInt()!!
                 if (bigInt.signum() < 0) {
-                    insert(0, "-")
-                    append(bigInt.toString(16).replace("-", ""))
+                    val mask = (BigInteger.ONE shl bitCount) - BigInteger.ONE
+                    val maskedValue = bigInt and mask
+                    append(maskedValue.toString(16))
                 } else {
                     append(bigInt.toString(16))
                 }

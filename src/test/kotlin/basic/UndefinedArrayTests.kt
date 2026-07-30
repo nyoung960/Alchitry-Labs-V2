@@ -245,7 +245,7 @@ class UndefinedArrayTests {
     @Test
     fun undefinedWidth2() = runBlocking {
         val test = testExprWithLocalValues(
-            "\$width(SIZE,1)", undefinedSignal(
+            "\$width(SIZE[0])", undefinedSignal(
                 "SIZE", UndefinedArrayWidth(
                     DefinedSimpleWidth(10)
                 )

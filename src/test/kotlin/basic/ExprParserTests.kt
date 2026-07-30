@@ -4,9 +4,11 @@ import com.alchitry.labs2.parsers.BitUtil
 import com.alchitry.labs2.parsers.hdl.ExprType
 import com.alchitry.labs2.parsers.hdl.asConstExpr
 import com.alchitry.labs2.parsers.hdl.asDynamicExpr
+import com.alchitry.labs2.parsers.hdl.lucid.parsers.toSourceFile
 import com.alchitry.labs2.parsers.hdl.types.Signal
 import com.alchitry.labs2.parsers.hdl.types.SignalDirection
 import com.alchitry.labs2.parsers.hdl.values.*
+import helpers.ProjectTester
 import helpers.SimpleLucidTester
 import helpers.TestSignalResolver
 import kotlinx.coroutines.runBlocking
@@ -393,7 +395,7 @@ internal class ExprParserTests {
         assertEquals(ExprType.Constant, expr.type)
         assert(test.hasNoIssues)
 
-        test = SimpleLucidTester("-8\n >> 2")
+        test = SimpleLucidTester("-8 >> 2")
         tree = test.parser.expr().also { test.context.walk(it) }
         expr = test.context.expr.resolve(tree)!!
 
@@ -844,6 +846,39 @@ internal class ExprParserTests {
         assertEquals(ExprType.Constant, expr.type)
 
         assert(test.hasNoIssues)
+    }
+
+    @Test
+    fun negateSignalTest(): Unit = runBlocking {
+        val tester = ProjectTester(
+            """
+                module my_module (
+                    input a
+                ) {
+                    sig my_sig[8]
+                    sig my_sig_b[8]
+                   
+                    always {
+                        my_sig = -1
+                        my_sig_b = -2
+                        
+                        if (my_sig) {} // to remove unused signal warning
+                        if (my_sig_b) {}
+                        if (a) {}
+                    }
+                }
+            """.trimIndent().toSourceFile()
+        )
+        val tree = tester.fullParse()
+        assert(tester.notationManager.hasNoErrors)
+
+        val mySig =
+            tree.context.resolveSignal(tree.moduleContext, "my_sig") as? Signal ?: error("Failed to resolve my_sig")
+        assertEquals(BitListValue(255, signed = false, width = 8), mySig.read())
+
+        val mySigB =
+            tree.context.resolveSignal(tree.moduleContext, "my_sig_b") as? Signal ?: error("Failed to resolve my_sig_b")
+        assertEquals(BitListValue(254, signed = false, width = 8), mySigB.read())
     }
 
     @Test
