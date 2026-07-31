@@ -451,13 +451,13 @@ fun LabsToolbar() {
                 }
             }
         }
-        ToolbarButton(
-            icon = painterResource("icons/inspect.svg"),
-            description = "Inspect internal signals",
-            enabled = !running && project != null
-        ) {
-            showProbeSignalSelectionDialog = true
-        }
+//        ToolbarButton(
+//            icon = painterResource("icons/inspect.svg"),
+//            description = "Inspect internal signals",
+//            enabled = !running && project != null
+//        ) {
+//            showProbeSignalSelectionDialog = true
+//        }
 
         ToolbarButton(
             icon = painterResource("icons/simulate.svg"),
