@@ -158,7 +158,6 @@ data class Waveform(
         val isDragging = LocalWaveformDragging.current
         val xOffset = LocalWaveformXOffset.current
         with(LocalDensity.current) {
-
             val cursorPosition = LocalCursorPosition.current
 
             val cursorValue = cursorPosition?.x?.let {

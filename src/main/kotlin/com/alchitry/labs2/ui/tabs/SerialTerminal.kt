@@ -21,7 +21,7 @@ import com.alchitry.labs2.painterResource
 import com.alchitry.labs2.ui.alchitry_text_field.Console
 import com.alchitry.labs2.ui.components.AlchitryToolTip
 import com.alchitry.labs2.ui.components.DeviceSelector
-import com.alchitry.labs2.ui.components.ToolbarButton
+import com.alchitry.labs2.ui.components.ToggleButton
 import com.alchitry.labs2.ui.isAwtTypedEvent
 import com.alchitry.labs2.windows.LocalLabsState
 import kotlinx.coroutines.*
@@ -47,8 +47,7 @@ fun SerialTerminalToolbar(
     var attachedToBoard by labsState.attachedToBoard
 
     Row(
-        modifier
-            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(20.dp)),
+        Modifier.background(MaterialTheme.colorScheme.surfaceColorAtElevation(20.dp)).then(modifier),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -67,43 +66,52 @@ fun SerialTerminalToolbar(
             isError = !rateCorrect,
             singleLine = true
         )
-        if (!state.connected) {
-            ToolbarButton(
-                painterResource("icons/link.svg"),
-                "Connect",
-                size = 52.dp,
-                enabled = state.selectedBoard != null && rateCorrect && !attachedToBoard,
-            ) {
-                state.connectionJob = state.scope.launch {
-                    val selection = state.selectedBoard ?: return@launch
-                    try {
-                        attachedToBoard = true
-                        state.connected = true
+        ToggleButton(
+            active = state.connected,
+            enabled = state.connected || (state.selectedBoard != null && rateCorrect && !attachedToBoard),
+            tooltip = { Text(if (state.connected) "Disconnect" else "Connect") },
+            onClick = {
+                if (it) {
+                    state.connectionJob = state.scope.launch {
+                        val selection = state.selectedBoard ?: return@launch
+                        try {
+                            attachedToBoard = true
+                            state.connected = true
 
-                        UsbUtil.lock.withLock {
-                            UsbUtil.openSerial(selection.first, selection.second)?.use { device ->
-                                device.setBaudrate(state.baudRate)
-                                withDevice(device)
+                            UsbUtil.lock.withLock {
+                                UsbUtil.openSerial(selection.first, selection.second)?.use { device ->
+                                    device.setBaudrate(state.baudRate)
+                                    withDevice(device)
+                                }
                             }
+                        } catch (_: CancellationException) {
+                        } catch (e: Exception) {
+                            Log.error("Connection failed: ${e.message}")
+                            state.connectionJob?.cancel("Connection failed: ${e.message}")
+                        } finally {
+                            attachedToBoard = false
+                            state.connected = false
                         }
-                    } catch (_: CancellationException) {
-                    } catch (e: Exception) {
-                        Log.error("Connection failed: ${e.message}")
-                        state.connectionJob?.cancel("Connection failed: ${e.message}")
-                    } finally {
-                        attachedToBoard = false
-                        state.connected = false
                     }
+                } else {
+                    state.connectionJob?.cancel()
                 }
-
             }
-        } else {
-            ToolbarButton(
-                painterResource("icons/link-off.svg"),
-                "Disconnect",
-                size = 52.dp,
-            ) {
-                state.connectionJob?.cancel()
+        ) {
+            Crossfade(state.connected) { connected ->
+                if (connected) {
+                    Icon(
+                        painterResource("icons/link-off.svg"),
+                        contentDescription = "Disconnect",
+                        modifier = Modifier.size(52.dp).padding(5.dp)
+                    )
+                } else {
+                    Icon(
+                        painterResource("icons/link.svg"),
+                        contentDescription = "Connect",
+                        modifier = Modifier.size(52.dp).padding(5.dp)
+                    )
+                }
             }
         }
     }
