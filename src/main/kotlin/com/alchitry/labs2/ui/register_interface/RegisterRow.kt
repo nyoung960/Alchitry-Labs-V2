@@ -18,18 +18,20 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.alchitry.labs2.painterResource
 import com.alchitry.labs2.ui.components.ToggleButton
+import com.alchitry.labs2.ui.graphing.GraphLinkState
+import com.alchitry.labs2.ui.graphing.RealtimeGraph
+import com.alchitry.labs2.ui.graphing.RealtimeGraphState
 import kotlinx.coroutines.*
 import java.awt.Cursor
 import kotlin.coroutines.resume
+import kotlin.math.roundToInt
+import kotlin.time.DurationUnit
 import kotlin.time.TimeSource
-
-data class TimedValue(
-    val value: Int,
-    val timestamp: TimeSource.Monotonic.ValueTimeMark = TimeSource.Monotonic.markNow()
-)
 
 class RegisterRow(
     val address: Int,
+    val graphLinkState: GraphLinkState,
+    val startTimeMark: TimeSource.Monotonic.ValueTimeMark,
     private val requestRemoval: (RegisterRow) -> Unit
 ) {
     val scope = CoroutineScope(Dispatchers.Main)
@@ -45,7 +47,7 @@ class RegisterRow(
     )
     var showGraph by mutableStateOf(false)
     var collectingValues by mutableStateOf(false)
-    val graphValues = mutableStateListOf<TimedValue>()
+    val graphValues = RealtimeGraphState()
 
     @Composable
     fun Draw(dragHandleModifier: Modifier, connected: Boolean, onRequest: suspend (RegisterRequest) -> Unit) {
@@ -58,26 +60,27 @@ class RegisterRow(
             }
         }
 
-        Row(
-            Modifier.height(IntrinsicSize.Max).background(MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = dragHandleModifier
-                    .pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)))
-                    .alpha(0.7f)
-                    .fillMaxHeight()
-                    .padding(15.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painterResource("icons/drag_indicator.svg"),
-                    "Drag",
-                    Modifier.size(25.dp)
-                )
+        val dragHandleWidth = 55.dp
+        Box(Modifier.background(MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp))) {
+            Box(Modifier.matchParentSize()) {
+                Box(
+                    modifier = dragHandleModifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxHeight()
+                        .width(dragHandleWidth)
+                        .pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)))
+                        .alpha(0.7f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painterResource("icons/drag_indicator.svg"),
+                        "Drag",
+                        Modifier.size(25.dp)
+                    )
+                }
             }
 
-            Column {
+            Column(Modifier.padding(start = dragHandleWidth)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Row(
                         Modifier.padding(vertical = 15.dp),
@@ -126,7 +129,10 @@ class RegisterRow(
                                                 }
                                             } ?: break
                                             if (collectingValues) {
-                                                graphValues.add(TimedValue(value))
+                                                graphValues.add(
+                                                    value,
+                                                    startTimeMark.elapsedNow().toDouble(DurationUnit.SECONDS)
+                                                )
                                             }
                                             valueState = valueState.withNewValue(value)
                                         }
@@ -233,10 +239,22 @@ class RegisterRow(
                         )
                     }
                 }
-                AnimatedVisibility(showGraph) {
-                    Box(Modifier.height(250.dp)) {
-                        // Graph goes here
-                    }
+                AnimatedVisibility(
+                    showGraph,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    RealtimeGraph(graphValues, link = graphLinkState, valueFormatter = {
+                        buildString {
+                            if (valueState.radix != Radix.Decimal) {
+                                append(valueState.radix.prefix)
+                            }
+                            if (valueState.signed)
+                                append(it.y.roundToInt().toString(valueState.radix.radix).uppercase())
+                            else
+                                append(it.y.roundToInt().toUInt().toString(valueState.radix.radix).uppercase())
+                        }
+                    })
                 }
             }
         }

@@ -11,9 +11,11 @@ import androidx.compose.ui.unit.dp
 import com.alchitry.labs2.Log
 import com.alchitry.labs2.ui.components.AlchitryToolTip
 import com.alchitry.labs2.ui.drag_and_drop.*
+import com.alchitry.labs2.ui.graphing.GraphLinkState
 import com.alchitry.labs2.ui.tabs.*
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlin.time.TimeSource
 
 class RegisterInterface(
     override var parent: TabPanel
@@ -21,6 +23,8 @@ class RegisterInterface(
     val state = SerialState()
     private val requests = MutableSharedFlow<RegisterRequest>(extraBufferCapacity = 256)
     private val rows = mutableStateListOf<RegisterRow>()
+    val graphLinkState = GraphLinkState()
+    val timeOffset = TimeSource.Monotonic.markNow()
 
     private var addressState by mutableStateOf(
         IntTextFieldState(
@@ -83,7 +87,7 @@ class RegisterInterface(
                         enabled = !canAddAddress
                     ) {
                         Button(onClick = {
-                            rows.add(RegisterRow(addressState.value) { rows.remove(it) })
+                            rows.add(RegisterRow(addressState.value, graphLinkState, timeOffset) { rows.remove(it) })
                         }, enabled = canAddAddress && addressState.valid) { Text("Add Address") }
                     }
                 }

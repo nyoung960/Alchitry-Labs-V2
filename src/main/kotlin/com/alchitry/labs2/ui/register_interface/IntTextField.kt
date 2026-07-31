@@ -68,7 +68,7 @@ fun IntTextField(
     Row(
         modifier.width(IntrinsicSize.Max),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(20.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
 
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 35.dp) {
