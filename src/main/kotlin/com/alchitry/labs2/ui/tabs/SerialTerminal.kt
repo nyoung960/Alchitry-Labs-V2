@@ -64,7 +64,8 @@ fun SerialTerminalToolbar(
             label = { Text("Baud Rate") },
             keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
             enabled = !state.connected,
-            isError = !rateCorrect
+            isError = !rateCorrect,
+            singleLine = true
         )
         if (!state.connected) {
             ToolbarButton(

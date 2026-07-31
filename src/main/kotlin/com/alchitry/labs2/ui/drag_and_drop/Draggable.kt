@@ -4,7 +4,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.AnimationVector2D
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.offset
@@ -38,6 +41,7 @@ fun <T> DragAndDropContext<T>.Draggable(
     onMoved: () -> Unit,
     onDragging: (Boolean) -> Unit = {},
     enabled: Boolean = true,
+    waitForSlop: Boolean = true,
     content: @Composable DragAndDropContext<T>.(dragHandleModifier: Modifier) -> Unit
 ) {
     var dragging by remember { mutableStateOf(false) }
@@ -113,24 +117,45 @@ fun <T> DragAndDropContext<T>.Draggable(
             }
             .pointerInput(item, otherDragging, enabled) {
                 if (!otherDragging && enabled)
-                    detectDragGestures(
-                        onDragStart = {
-                            // it is the local position within this Box
-                            val rootPos = it + position
-                            val bounds = handleBounds
-                            if (bounds != null && !bounds.contains(rootPos)) {
-                                // Touch started outside the handle — cancel immediately
-                                throw kotlinx.coroutines.CancellationException("Outside drag handle")
-                            }
-                            dragging = true
-                            onDragStart(contentForOverlay, rootPos, size, position)
-                            onDragging(true)
-                            scope.launch {
-                                animatedSize.snapTo(size)
-                                animatedSize.animateTo(IntSize.Zero)
-                            }
-                        },
-                        onDragEnd = {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val rootPos = down.position + position
+                        val bounds = handleBounds
+
+                        // If the touch started outside the drag handle, don't consume — let children handle it
+                        if (bounds != null && !bounds.contains(rootPos)) {
+                            return@awaitEachGesture
+                        }
+
+                        down.consume()
+
+                        val dragStartPos: Offset = down.position + position
+
+                        val dragPointerId = if (waitForSlop) {
+                            awaitTouchSlopOrCancellation(down.id) { change, _ ->
+                                change.consume()
+                            }?.id ?: return@awaitEachGesture
+                        } else {
+                            down.id
+                        }
+
+                        dragging = true
+                        onDragStart(contentForOverlay, dragStartPos, size, position)
+                        onDragging(true)
+                        scope.launch {
+                            animatedSize.snapTo(size)
+                            animatedSize.animateTo(IntSize.Zero)
+                        }
+
+                        onDragged(dragStartPos)
+
+                        val dragSuccess = drag(dragPointerId) { change ->
+                            change.consume()
+                            onDragged(change.position + position)
+                        }
+
+                        if (dragSuccess) {
+                            // onDragEnd
                             val wasMoved = hasDropZone()
                             if (!wasMoved)
                                 onDragging(false)
@@ -146,20 +171,16 @@ fun <T> DragAndDropContext<T>.Draggable(
                                 onDropped(item, position, onMoved)
                                 dragging = false
                             }
-                        },
-                        onDragCancel = {
+                        } else {
+                            // onDragCancel
                             onDragging(false)
                             scope.launch {
                                 animatedSize.snapTo(getDraggableSize())
                                 dragging = false
                             }
                             onDragCancel()
-                        },
-                        onDrag = { change, _ ->
-                            change.consume()
-                            onDragged(change.position + position)
                         }
-                    )
+                    }
             }
     ) {
         if (dragging)

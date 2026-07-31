@@ -76,7 +76,6 @@ class RegisterInterface(
                         signSelector = false
                     ) {
                         addressState = it
-                        println(it)
                     }
                     val canAddAddress = rows.none { it.address == addressState.value }
                     AlchitryToolTip(
@@ -103,7 +102,7 @@ class RegisterInterface(
                     }
                     rows.forEachIndexed { index, row ->
                         key(row) {
-                            Draggable(row, onMoved = { rows.remove(row) }) { dragHandleModifier ->
+                            Draggable(row, onMoved = { rows.remove(row) }, waitForSlop = false) { dragHandleModifier ->
                                 Column {
                                     row.Draw(dragHandleModifier, state.connected) { requests.emit(it) }
                                     DropZone(

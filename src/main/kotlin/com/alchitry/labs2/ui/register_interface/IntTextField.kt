@@ -73,7 +73,7 @@ fun IntTextField(
 
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 35.dp) {
 
-            RadixSelector(state.radix, modifier = Modifier.width(125.dp)) {
+            RadixSliderSelector(state.radix, modifier = Modifier.width(125.dp)) {
                 val text = if (state.valid) {
                     IntTextFieldState.formatValue(state.value, state.signed, it, false)
                 } else state.text
@@ -99,7 +99,8 @@ fun IntTextField(
             enabled = enabled,
             isError = state.text != state.valueString,
             readOnly = readOnly,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            singleLine = true
         )
     }
 }
