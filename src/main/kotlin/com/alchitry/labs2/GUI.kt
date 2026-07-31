@@ -38,12 +38,14 @@ fun main(args: Array<String>) {
 
         val projectPath = args.firstOrNull()
 
+
         application {
             LaunchedEffect(Unit) {
                 delay(3.seconds)
                 lock.release()
                 lockFile.close()
             }
+
 
             when (activeWindow) {
                 Settings.WindowType.Labs -> labsWindow(projectPath)

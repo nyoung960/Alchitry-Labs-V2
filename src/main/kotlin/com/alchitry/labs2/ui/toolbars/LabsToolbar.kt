@@ -25,10 +25,10 @@ import com.alchitry.labs2.ui.components.AlchitryToolbarIcon
 import com.alchitry.labs2.ui.components.ToolbarButton
 import com.alchitry.labs2.ui.dialogs.*
 import com.alchitry.labs2.ui.menu.*
+import com.alchitry.labs2.ui.register_interface.RegisterInterface
 import com.alchitry.labs2.ui.tabs.BoardSimulationTab
 import com.alchitry.labs2.ui.tabs.SerialTerminal
 import com.alchitry.labs2.ui.tabs.Workspace
-import com.alchitry.labs2.ui.tabs.register_interface.RegisterInterface
 import com.alchitry.labs2.ui.theme.AlchitryColors
 import com.alchitry.labs2.ui.theme.AlchitryTheme
 import com.alchitry.labs2.windows.LocalLabsState

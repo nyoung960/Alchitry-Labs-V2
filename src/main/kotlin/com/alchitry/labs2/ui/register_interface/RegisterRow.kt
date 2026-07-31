@@ -1,4 +1,4 @@
-package com.alchitry.labs2.ui.tabs.register_interface
+package com.alchitry.labs2.ui.register_interface
 
 import androidx.compose.animation.Animatable
 import androidx.compose.foundation.background
@@ -103,7 +103,7 @@ class RegisterRow(
                         .background(
                             watchColorAnimation.value
                         )
-                        .clickable {
+                        .clickable(enabled = (!running || watchJob != null) && connected) {
                             if (watchJob == null) {
                                 running = true
                                 watchJob = scope.launch {

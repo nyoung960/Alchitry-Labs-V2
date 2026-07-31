@@ -1,4 +1,4 @@
-package com.alchitry.labs2.ui.tabs.register_interface
+package com.alchitry.labs2.ui.register_interface
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
