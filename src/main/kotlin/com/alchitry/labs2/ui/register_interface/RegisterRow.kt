@@ -110,7 +110,14 @@ class RegisterRow(
                         }, enabled = !running && connected) {
                             Text("Read")
                         }
-                        Button({}, enabled = !running && connected) {
+                        Button({
+                            running = true
+                            scope.launch {
+                                onRequest(RegisterRequest.BasicWrite(address, valueState.value) {
+                                    running = false
+                                })
+                            }
+                        }, enabled = !running && connected) {
                             Text("Write")
                         }
 
