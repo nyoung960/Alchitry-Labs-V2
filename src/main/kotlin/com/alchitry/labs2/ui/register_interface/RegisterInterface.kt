@@ -107,8 +107,6 @@ class RegisterInterface(
     }
 
     private suspend fun monitorRegisters(device: SerialDevice) = withContext(Dispatchers.IO) {
-        var count = 0L
-        var lastReportTime = System.currentTimeMillis()
         device.flushReadBuffer()
 
         while (isActive) {
@@ -128,22 +126,6 @@ class RegisterInterface(
 
             if (pendingRequests.isEmpty() && !collectingValues) {
                 delay(100.milliseconds)
-            }
-
-            count++
-
-            val now = System.currentTimeMillis()
-            val timeElapsed = now - lastReportTime
-
-            if (timeElapsed >= 1000L) {
-                // We might have run slightly over 1 second, so we calculate the exact rate
-                val loopsPerSecond = (count.toDouble() / (timeElapsed / 1000.0)).toLong()
-
-                println("Loops per second: $loopsPerSecond")
-
-                // Reset for the next second
-                count = 0L
-                lastReportTime = now
             }
         }
     }
