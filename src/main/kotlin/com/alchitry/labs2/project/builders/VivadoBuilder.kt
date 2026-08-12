@@ -82,10 +82,17 @@ data object VivadoBuilder : ProjectBuilder() {
         if (binFile.exists()) {
             binFile.copyTo(project.binFile)
 
-            when (didTimingPass(project, topModuleName)) {
+            val timingReport = parseTimingReport(project, topModuleName)
+            when (timingReport?.constraintsMet) {
                 true -> Log.success("Project built successfully.")
                 false -> Log.warn("Project built but failed to meet timing.")
                 null -> Log.warn("Project built but timing was unchecked.")
+            }
+            if (timingReport?.constraintsMet != true) {
+                timingReport?.let {
+                    Log.println()
+                    printTimingDetails(it)
+                }
             }
 
         } else {
@@ -95,7 +102,10 @@ data object VivadoBuilder : ProjectBuilder() {
         }
     }
 
-    private suspend fun didTimingPass(project: Project, topModuleName: String): Boolean? = withContext(Dispatchers.IO) {
+    private suspend fun parseTimingReport(
+        project: Project,
+        topModuleName: String
+    ): VivadoTimingReportParser.TimingReport? = withContext(Dispatchers.IO) {
         val timingReport = project.buildDirectory
             .resolve("vivado")
             .resolve("${project.data.projectName}.runs")
@@ -106,7 +116,43 @@ data object VivadoBuilder : ProjectBuilder() {
             return@withContext null
         }
 
-        return@withContext timingReport.readText().contains("All user specified timing constraints are met.")
+        return@withContext VivadoTimingReportParser.parse(timingReport.readText())
+    }
+
+    private fun printTimingDetails(report: VivadoTimingReportParser.TimingReport) {
+        report.clocks.forEach { clock ->
+            val passed = clock in report.passingClocks
+            val message =
+                "Clock ${clock.name} (${clock.frequency} MHz): ${if (passed) "passed" else "FAILED"}"
+            if (passed) Log.success(message) else Log.error(message)
+        }
+
+        val failingPaths = report.failingPaths
+        if (failingPaths.isNotEmpty()) {
+            Log.println()
+            Log.warn("Worst failing paths:")
+            failingPaths.take(5).forEach { path ->
+                Log.warn(
+                    "  Slack ${path.slack}ns: ${path.source} -> ${path.destination}" +
+                            (path.pathType?.let { " ($it)" } ?: "")
+                )
+            }
+            report.summary?.let { summary ->
+                Log.println()
+                if (summary.setupFailingEndpoints != null && summary.setupFailingEndpoints > 0) {
+                    Log.warn(
+                        "Setup: ${summary.setupFailingEndpoints} failing endpoints, " +
+                                "WNS ${summary.worstNegativeSlack}ns, TNS ${summary.totalNegativeSlack}ns"
+                    )
+                }
+                if (summary.holdFailingEndpoints != null && summary.holdFailingEndpoints > 0) {
+                    Log.warn(
+                        "Hold: ${summary.holdFailingEndpoints} failing endpoints, " +
+                                "WHS ${summary.worstHoldSlack}ns, THS ${summary.totalHoldSlack}ns"
+                    )
+                }
+            }
+        }
     }
 
     private fun generateProjectFile(project: Project, sourceFiles: List<File>, constraintFiles: List<File>): String =

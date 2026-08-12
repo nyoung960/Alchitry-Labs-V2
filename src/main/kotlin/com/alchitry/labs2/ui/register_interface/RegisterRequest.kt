@@ -5,7 +5,7 @@ import com.alchitry.hardware.usb.SerialDevice
 sealed class RegisterRequest {
     abstract fun process(device: SerialDevice)
 
-    data class BasicWrite(val address: Int, val data: Int, val onComplete: (() -> Unit)? = null) : RegisterRequest() {
+    data class Write(val address: Int, val data: Int, val onComplete: (() -> Unit)? = null) : RegisterRequest() {
         override fun process(device: SerialDevice) {
             val buffer = ByteArray(9)
             buffer[0] = (1 shl 7).toByte()
@@ -22,7 +22,7 @@ sealed class RegisterRequest {
         }
     }
 
-    data class BasicRead(val address: Int, val onComplete: (Int?) -> Unit) : RegisterRequest() {
+    data class Read(val address: Int, val onComplete: (Int?) -> Unit) : RegisterRequest() {
         override fun process(device: SerialDevice) {
             try {
                 device.flushReadBuffer()
@@ -50,18 +50,6 @@ sealed class RegisterRequest {
                 onComplete(null)
                 throw e
             }
-        }
-    }
-
-    data class BulkWrite(val address: Int, val increment: Boolean, val data: Collection<Int>) : RegisterRequest() {
-        override fun process(device: SerialDevice) {
-            TODO("Not yet implemented")
-        }
-    }
-
-    data class BulkRead(val address: Int, val increment: Boolean, val length: Int) : RegisterRequest() {
-        override fun process(device: SerialDevice) {
-            TODO("Not yet implemented")
         }
     }
 }

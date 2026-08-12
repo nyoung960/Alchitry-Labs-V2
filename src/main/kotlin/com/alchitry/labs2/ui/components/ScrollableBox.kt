@@ -37,3 +37,24 @@ fun ScrollableBox(
         )
     }
 }
+
+@Composable
+fun VerticalScrollableBox(
+    modifier: Modifier = Modifier,
+    verticalScrollState: ScrollState = rememberScrollState(),
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(modifier) {
+        Box(
+            Modifier.fillMaxWidth().verticalScroll(verticalScrollState)
+                .width(IntrinsicSize.Max)
+        ) {
+            content()
+        }
+        VerticalScrollbar(
+            rememberScrollbarAdapter(verticalScrollState),
+            Modifier.align(Alignment.CenterEnd)
+                .padding(end = 8.dp, top = 8.dp, bottom = 8.dp)
+        )
+    }
+}

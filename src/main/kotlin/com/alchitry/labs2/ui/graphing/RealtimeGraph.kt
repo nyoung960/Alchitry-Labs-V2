@@ -249,6 +249,7 @@ fun Modifier.graphGestures(link: GraphLinkState): Modifier = composed {
         .onPointerEvent(PointerEventType.Scroll) { event ->
             val scroll = event.changes.fold(0f) { acc, c -> acc + c.scrollDelta.y }
             if (scroll != 0f) {
+                event.changes.forEach { it.consume() }
                 stopFling()
                 val centerX = event.changes.first().position.x
                 link.zoomBy(1f - scroll / 20f, centerX)

@@ -6,7 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -18,25 +21,21 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.alchitry.labs2.painterResource
 import com.alchitry.labs2.ui.components.ToggleButton
-import com.alchitry.labs2.ui.graphing.GraphLinkState
 import com.alchitry.labs2.ui.graphing.RealtimeGraph
 import com.alchitry.labs2.ui.graphing.RealtimeGraphState
-import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import java.awt.Cursor
-import kotlin.coroutines.resume
 import kotlin.math.roundToInt
+import kotlin.time.Duration
 import kotlin.time.DurationUnit
-import kotlin.time.TimeSource
 
 class RegisterRow(
     val address: Int,
-    val graphLinkState: GraphLinkState,
-    val startTimeMark: TimeSource.Monotonic.ValueTimeMark,
+    val parent: RegisterInterface,
     private val requestRemoval: (RegisterRow) -> Unit
 ) {
-    val scope = CoroutineScope(Dispatchers.Main)
     var running by mutableStateOf(false)
-    var watchJob by mutableStateOf<Job?>(null)
+    var watching by mutableStateOf(false)
     var valueState by mutableStateOf(
         IntTextFieldState(
             value = 0,
@@ -46,20 +45,23 @@ class RegisterRow(
         )
     )
     var showGraph by mutableStateOf(false)
-    var collectingValues by mutableStateOf(false)
     val graphValues = RealtimeGraphState()
+    val requests = Channel<RegisterRequest>(capacity = 10)
+
+    fun onNewData(data: Int, time: Duration) {
+        graphValues.add(
+            data,
+            time.toDouble(DurationUnit.SECONDS)
+        )
+        valueState = valueState.withNewValue(data)
+    }
+
+    fun resetData() {
+        graphValues.clear()
+    }
 
     @Composable
-    fun Draw(dragHandleModifier: Modifier, connected: Boolean, onRequest: suspend (RegisterRequest) -> Unit) {
-        LaunchedEffect(connected) {
-            if (!connected) {
-                running = false
-                watchJob?.cancel()
-                watchJob = null
-                collectingValues = false
-            }
-        }
-
+    fun Draw(dragHandleModifier: Modifier, connected: Boolean) {
         val dragHandleWidth = 55.dp
         Box(Modifier.background(MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp))) {
             Box(Modifier.matchParentSize()) {
@@ -100,56 +102,37 @@ class RegisterRow(
 
                         Button({
                             running = true
-                            scope.launch {
-                                onRequest(RegisterRequest.BasicRead(address) { value ->
+                            if (requests.trySend(RegisterRequest.Read(address) { value ->
                                     if (value != null)
                                         valueState = valueState.withNewValue(value)
                                     running = false
-                                })
+                                }).isFailure) {
+                                running = false
                             }
+
                         }, enabled = !running && connected) {
                             Text("Read")
                         }
                         Button({
                             running = true
-                            scope.launch {
-                                onRequest(RegisterRequest.BasicWrite(address, valueState.value) {
+                            if (requests.trySend(RegisterRequest.Write(address, valueState.value) {
                                     running = false
-                                })
+                                }).isFailure
+                            ) {
+                                running = false
                             }
                         }, enabled = !running && connected) {
                             Text("Write")
                         }
 
                         ToggleButton(
-                            active = watchJob != null,
-                            enabled = (!running || watchJob != null) && connected,
+                            active = watching,
+                            enabled = (!running || watching),
                             tooltip = { Text("Watch Register") },
                             onClick = {
-                                if (watchJob == null) {
-                                    running = true
-                                    watchJob = scope.launch {
-                                        while (isActive) {
-                                            val value: Int = suspendCancellableCoroutine { cont ->
-                                                launch {
-                                                    onRequest(RegisterRequest.BasicRead(address) { cont.resume(it) })
-                                                }
-                                            } ?: break
-                                            if (collectingValues) {
-                                                graphValues.add(
-                                                    value,
-                                                    startTimeMark.elapsedNow().toDouble(DurationUnit.SECONDS)
-                                                )
-                                            }
-                                            valueState = valueState.withNewValue(value)
-                                        }
-                                        watchJob = null
-                                        running = false
-                                    }
-                                } else {
-                                    watchJob?.cancel()
-                                    watchJob = null
-                                    running = false
+                                watching = it
+                                if (it) {
+                                    parent.collectingValues = true
                                 }
                             }
                         ) {
@@ -165,7 +148,6 @@ class RegisterRow(
                             active = showGraph,
                             onClick = {
                                 showGraph = it
-                                if (it) collectingValues = true
                             },
                             tooltip = { Text("Show Graph") }
                         ) {
@@ -174,53 +156,6 @@ class RegisterRow(
                                 contentDescription = "Show Graph",
                                 modifier = Modifier.size(width = 70.dp, height = 45.dp)
                             )
-                        }
-
-                        AnimatedVisibility(
-                            showGraph,
-                            enter = fadeIn() + expandHorizontally(),
-                            exit = fadeOut() + shrinkHorizontally()
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(15.dp)
-                            ) {
-                                ToggleButton(
-                                    active = collectingValues,
-                                    enabled = connected && watchJob != null,
-                                    tooltip = { Text(if (collectingValues) "Pause" else "Start") },
-                                    onClick = { collectingValues = it }
-                                ) {
-                                    Crossfade(collectingValues) { collecting ->
-                                        if (collecting) {
-                                            Icon(
-                                                painterResource("icons/pause.svg"),
-                                                contentDescription = "Pause",
-                                                modifier = Modifier.size(45.dp).padding(5.dp)
-                                            )
-                                        } else {
-                                            Icon(
-                                                painterResource("icons/play.svg"),
-                                                contentDescription = "Start",
-                                                modifier = Modifier.size(45.dp).padding(5.dp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                ToggleButton(
-                                    active = false,
-                                    enabled = connected && watchJob != null,
-                                    tooltip = { Text("Reset") },
-                                    onClick = { graphValues.clear() }
-                                ) {
-                                    Icon(
-                                        painterResource("icons/replay.svg"),
-                                        contentDescription = "Reset",
-                                        modifier = Modifier.size(45.dp).padding(5.dp)
-                                    )
-                                }
-                            }
                         }
                     }
 
@@ -251,7 +186,7 @@ class RegisterRow(
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
                 ) {
-                    RealtimeGraph(graphValues, link = graphLinkState, valueFormatter = {
+                    RealtimeGraph(graphValues, link = parent.graphLinkState, valueFormatter = {
                         buildString {
                             if (valueState.radix != Radix.Decimal) {
                                 append(valueState.radix.prefix)
