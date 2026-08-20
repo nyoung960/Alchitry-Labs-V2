@@ -36,6 +36,8 @@ data class BitListValue(
                 )
             }
         }
+
+        ValueFormat.Character -> Char(toBigInt()?.intValueExact()!!).toString()
     }
 
     override val lsb: Bit = bits.firstOrNull() ?: Bit.Bx

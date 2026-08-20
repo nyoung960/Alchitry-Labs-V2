@@ -1213,7 +1213,7 @@ class ExprParser(
                     return
                 }
 
-                val regex = Regex("(%d)|(%h)|(%b)|(%\\d*?f)")
+                val regex = Regex("(%d)|(%h)|(%b)|(%\\d*?f)|(%c)")
                 val matches = regex.findAll(string).toList()
 
                 if (matches.size != args.size - 1) {
@@ -1253,6 +1253,10 @@ class ExprParser(
                                     arg.value.toString()
                                 }
 
+                                match.groups[5] != null -> { // char
+                                    Char(arg.value.roundToInt()).toString()
+                                }
+
                                 else -> error("Unknown format!")
                             }
 
@@ -1266,6 +1270,7 @@ class ExprParser(
                                             match.groups[4]!!.value.run { substring(1, length - 1) }.toIntOrNull() ?: 0
                                         ValueFormat.Fractional(fractional)
                                     }
+                                    match.groups[5] != null -> ValueFormat.Character
 
                                     else -> error("Unknown format!")
                                 }

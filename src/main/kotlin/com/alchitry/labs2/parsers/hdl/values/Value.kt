@@ -8,6 +8,7 @@ sealed class ValueFormat {
     data object Hex : ValueFormat()
     data object Decimal : ValueFormat()
     data class Fractional(val fractionalBits: Int) : ValueFormat()
+    data object Character : ValueFormat()
 }
 
 
