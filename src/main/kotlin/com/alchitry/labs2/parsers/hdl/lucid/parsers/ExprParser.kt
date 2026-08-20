@@ -1186,7 +1186,7 @@ class ExprParser(
                 }
             }
 
-            Function.PRINT -> {
+            Function.PRINT, Function.PRINTLN -> {
                 if (context !is LucidBlockContext)
                     return
 
@@ -1195,12 +1195,10 @@ class ExprParser(
                 }
 
                 if (args.size == 1) {
-                    if (string != null) {
-                        context.print(string)
-                        return
-                    }
+                    val toPrint = string.takeIf { string != null } ?: "${ctx.functionExpr(0)?.text} = ${args[0]}"
 
-                    context.print("${ctx.functionExpr(0)?.text} = ${args[0]}")
+                    if (function == Function.PRINT) { context.print(toPrint) }
+                    else { context.println(toPrint) }
 
                     return
                 }
@@ -1224,7 +1222,7 @@ class ExprParser(
                     return
                 }
 
-                context.print(buildString {
+                val toPrint = buildString {
                     var lastIdx = 0
                     matches.forEachIndexed { idx, match ->
                         append(string.subSequence(lastIdx, match.range.first))
@@ -1280,7 +1278,10 @@ class ExprParser(
                         append(value)
                     }
                     append(string.subSequence(lastIdx, string.length))
-                })
+                }
+
+                if (function == Function.PRINT) { context.print(toPrint) }
+                else { context.println(toPrint) }
             }
 
             is Function.Custom -> {

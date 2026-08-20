@@ -1515,6 +1515,7 @@ class SystemVerilogConverter(
 
             Function.ASSERT,
             Function.PRINT,
+            Function.PRINTLN,
             Function.TICK,
             Function.SILENTTICK,
             is Function.Custom ->

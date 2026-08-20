@@ -72,6 +72,12 @@ class LucidBlockContext(
     fun print(text: String) {
         if (stage != ParseStage.Evaluation)
             return
+        Log.print(text)
+    }
+
+    fun println(text: String) {
+        if (stage != ParseStage.Evaluation)
+            return
         Log.println(text)
     }
 

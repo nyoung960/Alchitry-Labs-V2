@@ -35,6 +35,7 @@ sealed class Function(val label: String, val argCount: Int, val exprType: ExprTy
     data object TICK : Function("tick", 0, ExprType.Dynamic, testOnly = true)
     data object SILENTTICK : Function("silent_tick", 0, ExprType.Dynamic, true)
     data object ASSERT : Function("assert", 1, ExprType.Dynamic, testOnly = true)
+    data object PRINTLN : Function("println", -1, ExprType.Dynamic, simOnly = true)
     data object PRINT : Function("print", -1, ExprType.Dynamic, simOnly = true)
     data object IS_SIMULATION : Function("is_sim", 0, ExprType.Dynamic)
 
