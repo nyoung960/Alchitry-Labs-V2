@@ -37,7 +37,7 @@ data class BitListValue(
             }
         }
 
-        ValueFormat.Character -> Char(toBigInt()?.intValueExact()!!).toString()
+        ValueFormat.Character -> Char(toBigInt()?.toInt() ?: 0xFFFD).toString()
     }
 
     override val lsb: Bit = bits.firstOrNull() ?: Bit.Bx
