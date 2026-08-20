@@ -128,7 +128,7 @@ data class BlockParser(
     }
 
     override suspend fun exitAlwaysFunction(ctx: AlwaysFunctionContext) {
-        if (!inTestBlock && !inFunctionBlock) {
+        if ((context.stage == ParseStage.Convert) && (!inTestBlock && !inFunctionBlock)) {
             context.reportError(ctx, "Functions can only be called in test or function blocks.")
         }
     }

@@ -790,7 +790,12 @@ class SystemVerilogConverter(
     }
 
     override fun exitAlwaysFunction(ctx: LucidParser.AlwaysFunctionContext) {
-        ctx.verilog = ctx.function().requireNotNull(ctx).verilog
+        val funcContext = ctx.function().requireNotNull(ctx)
+
+        val functionName = funcContext.FUNCTION_ID()?.text?.substring(1)!!
+        val func = context.resolveFunction(functionName)!!
+
+        ctx.verilog = if (func.simOnly) "" else ctx.function().requireNotNull(ctx).verilog
     }
 
     override fun exitAssignStat(ctx: LucidParser.AssignStatContext) {

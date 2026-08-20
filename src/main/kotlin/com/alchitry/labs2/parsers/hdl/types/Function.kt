@@ -6,7 +6,7 @@ import com.alchitry.labs2.parsers.hdl.ExprType
 import com.alchitry.labs2.parsers.hdl.values.*
 import java.math.BigInteger
 
-sealed class Function(val label: String, val argCount: Int, val exprType: ExprType, val testOnly: Boolean = false) {
+sealed class Function(val label: String, val argCount: Int, val exprType: ExprType, val testOnly: Boolean = false, val simOnly: Boolean = false) {
     data object CLOG2 : Function("clog2", 1, ExprType.Known) {
         fun compute(value: Value): Value? {
             val bigInt = (value as? SimpleValue)?.toBigInt() ?: return null
@@ -35,7 +35,7 @@ sealed class Function(val label: String, val argCount: Int, val exprType: ExprTy
     data object TICK : Function("tick", 0, ExprType.Dynamic, testOnly = true)
     data object SILENTTICK : Function("silent_tick", 0, ExprType.Dynamic, true)
     data object ASSERT : Function("assert", 1, ExprType.Dynamic, testOnly = true)
-    data object PRINT : Function("print", -1, ExprType.Dynamic, testOnly = true)
+    data object PRINT : Function("print", -1, ExprType.Dynamic, simOnly = true)
     data object IS_SIMULATION : Function("is_sim", 0, ExprType.Dynamic)
 
     class Custom(label: String, val args: List<CustomArg>, val functionBlock: FunctionBlockContext) :
